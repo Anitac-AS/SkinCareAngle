@@ -1,84 +1,113 @@
-<!doctype html>
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>保養品總覽</title>
-<style>
-body{font-family: system-ui, -apple-system, Arial; padding:12px}
-.wrap{max-width:860px;margin:0 auto}
-.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-@media (max-width:640px){.grid{grid-template-columns:1fr}}
-.card{border:1px solid #eee;border-radius:14px;padding:12px}
-.meta{font-size:12px;color:#666}
-img{width:100%;border-radius:10px;object-fit:cover;max-height:160px}
-input,select{padding:10px;border:1px solid #ddd;border-radius:10px;margin-right:8px}
-.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px}
-.danger{background:#fee;color:#a00}
-.warn{background:#fff5e6;color:#a55}
-.ok{background:#eef7ff;color:#156}
-</style>
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>保養品總覽</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Arial;background:#fafafa;padding:12px}
+    .wrap{max-width:860px;margin:0 auto}
+    .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+    @media (max-width:640px){.grid{grid-template-columns:1fr}}
+    .card{background:#fff;border:1px solid #eee;border-radius:14px;padding:12px;box-shadow:0 2px 6px rgba(0,0,0,0.06)}
+    .meta{font-size:12px;color:#666}
+    img{width:100%;border-radius:10px;object-fit:cover;max-height:160px;background:#eee}
+    input,select,button{padding:10px;border:1px solid #ddd;border-radius:10px;margin-right:8px}
+    button{background:#1565c0;color:#fff;border:0;cursor:pointer}
+    button:hover{background:#0d47a1}
+    .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;margin:6px 0}
+    .danger{background:#fee;color:#a00}
+    .warn{background:#fff5e6;color:#a55}
+    .ok{background:#eef7ff;color:#156}
+  </style>
+</head>
 <body>
-<div class="wrap">
-<h3>保養品總覽</h3>
-<div style="margin:8px 0">
-<input id="q" placeholder="搜尋 品名/品牌/條碼"/>
-<select id="status">
-<option value="">全部狀態</option>
-10
-<option>未開封</option><option>使用中</option><option>已用完</option><option>過期</
-option>
-</select>
-<button id="btn">查詢</button>
-</div>
-<div class="grid" id="list"></div>
-</div>
-<script>
-const GAS_LIST = 'https://script.google.com/macros/s/XXXXXXXXXXXXXXXX/exec'; // ← 換成你的
-Apps Script Web App URL（同一個）
-document.getElementById('btn').onclick = load;
-window.addEventListener('load', load);
-async function load(){
-const q = document.getElementById('q').value.trim();
-const status = document.getElementById('status').value;
-const url = new URL(GAS_LIST);
-if (q) url.searchParams.set('q', q);
-if (status) url.searchParams.set('status', status);
-const res = await fetch(url);
-const json = await res.json();
-const box = document.getElementById('list');
-box.innerHTML = '';
-json.data.forEach(item => box.appendChild(render(item)));
-}
-function render(it){
-const d = daysToExpiry(it.expiry_date);
-const badge = document.createElement('div');
-badge.className = 'badge ' + (isNaN(d) ? 'ok' : d<0 ? 'danger' : d<=30 ? 'warn' : 'ok');
-badge.textContent = isNaN(d) ? '無效期' : d<0 ? `已過期 ${-d} 天` : `D-${d}`;
-const img = document.createElement('img');
-img.src = it.image_url || 'https://dummyimage.com/600x400/eeeeee/aaaaaa&text=%20';
-img.alt = it.name || '';
-const div = document.createElement('div');
-div.className = 'card';
-div.innerHTML = `
- <div>${badge.outerHTML}</div>
- <div style="margin:8px 0"><strong>${escapeHtml(it.name||'(未命名)')}</strong>${it.brand? ' /
-'+escapeHtml(it.brand):''}</div>
- <div class="meta">分類：${escapeHtml(it.category||'-')}｜條碼：${escapeHtml(it.barcode||'-')}</
-div>
- <div class="meta">效期：${escapeHtml(it.expiry_date||'-')}｜狀態：${escapeHtml(it.status||'-')}</
-div>
- `;
-div.prepend(img);
-return div;
-}
-11
-function daysToExpiry(dateStr){
-if (!dateStr) return NaN;
-const d = new Date(dateStr + 'T00:00:00');
-const ms = d - new Date();
-return Math.floor(ms / (1000*60*60*24));
-}
-function escapeHtml(s){return (s||'').replace(/[&<>"']/g,
-c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
-</script>
+  <div class="wrap">
+    <h3>保養品總覽</h3>
+    <div style="margin:8px 0">
+      <input id="q" placeholder="搜尋 品名/品牌/條碼" />
+      <select id="status">
+        <option value="">全部狀態</option>
+        <option>未開封</option>
+        <option>使用中</option>
+        <option>已用完</option>
+        <option>過期</option>
+      </select>
+      <button id="btn">查詢</button>
+    </div>
+    <div class="grid" id="list"></div>
+  </div>
+
+  <script>
+    // ← 換成你的 Apps Script Web App URL（同一支，GET 取清單）
+    const GAS_LIST = "https://script.google.com/macros/s/XXXXXXXXXXXXXXXX/exec";
+
+    document.getElementById('btn').onclick = load;
+    window.addEventListener('load', load);
+
+    async function load(){
+      const q = document.getElementById('q').value.trim();
+      const status = document.getElementById('status').value;
+      const url = new URL(GAS_LIST);
+      if (q) url.searchParams.set('q', q);
+      if (status) url.searchParams.set('status', status);
+
+      let json;
+      try{
+        const res = await fetch(url);
+        json = await res.json();
+      }catch(e){
+        document.getElementById('list').innerHTML = `<div class="card">無法載入清單：${escapeHtml(String(e))}</div>`;
+        return;
+      }
+
+      const box = document.getElementById('list');
+      box.innerHTML = '';
+      (json.data || []).forEach(item => box.appendChild(render(item)));
+    }
+
+    function render(it){
+      const d = daysToExpiry(it.expiry_date);
+      const badge = document.createElement('div');
+      badge.className = 'badge ' + (isNaN(d) ? 'ok' : d<0 ? 'danger' : d<=30 ? 'warn' : 'ok');
+      badge.textContent = isNaN(d) ? '無效期' : d<0 ? `已過期 ${-d} 天` : `D-${d}`;
+
+      const img = document.createElement('img');
+      img.src = it.image_url || 'https://dummyimage.com/600x400/eeeeee/aaaaaa&text=%20';
+      img.alt = it.name || '';
+
+      const div = document.createElement('div');
+      div.className = 'card';
+      div.appendChild(img);
+
+      const title = document.createElement('div');
+      title.style.margin = '8px 0';
+      title.innerHTML = `<strong>${escapeHtml(it.name || '(未命名)')}</strong>${it.brand ? ' / ' + escapeHtml(it.brand) : ''}`;
+      div.appendChild(badge);
+      div.appendChild(title);
+
+      const meta1 = document.createElement('div');
+      meta1.className = 'meta';
+      meta1.textContent = `分類：${it.category || '-'}｜條碼：${it.barcode || '-'}`;
+      div.appendChild(meta1);
+
+      const meta2 = document.createElement('div');
+      meta2.className = 'meta';
+      meta2.textContent = `效期：${it.expiry_date || '-'}｜狀態：${it.status || '-'}`;
+      div.appendChild(meta2);
+
+      return div;
+    }
+
+    function daysToExpiry(dateStr){
+      if (!dateStr) return NaN;
+      const d = new Date(dateStr + 'T00:00:00');
+      const ms = d - new Date();
+      return Math.floor(ms / (1000*60*60*24));
+    }
+    function escapeHtml(s){
+      return (s||'').replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+    }
+  </script>
 </body>
-6) 注意事項 & 小撇步
-語系優先： app.gs 會優先取 OBF 的 prod
+</html>
