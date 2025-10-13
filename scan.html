@@ -1,74 +1,195 @@
-<!doctype html>
-.danger{background:#fee;color:#a00}
-.warn{background:#fff5e6;color:#a55}
-.ok{background:#eef7ff;color:#156}
-</style>
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>保養品掃碼新增</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, Arial;
+      padding: 12px;
+      background: #fafafa;
+    }
+    .card {
+      max-width: 520px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    }
+    video {
+      width: 100%;
+      border-radius: 14px;
+      background: #000;
+    }
+    .row {
+      margin: 10px 0;
+    }
+    input, select, textarea, button {
+      width: 100%;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid #ddd;
+      box-sizing: border-box;
+      font-size: 15px;
+    }
+    button {
+      border: 0;
+      background: #1565c0;
+      color: #fff;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0d47a1;
+    }
+    .hint {
+      color: #666;
+      font-size: 13px;
+      margin-top: 6px;
+    }
+  </style>
+</head>
 <body>
-<div class="wrap">
-<h3>保養品總覽</h3>
-<div style="margin:8px 0">
-<input id="q" placeholder="搜尋 品名/品牌/條碼"/>
-<select id="status">
-<option value="">全部狀態</option>
-<option>未開封</option><option>使用中</option><option>已用完</option><option>過期</option>
-</select>
-<button id="btn">查詢</button>
-</div>
-<div class="grid" id="list"></div>
-</div>
-<script>
-const GAS_LIST = 'https://script.google.com/macros/s/XXXXXXXXXXXXXXXX/exec'; // ← 換成你的 Apps Script Web App URL（同一個）
+  <div class="card">
+    <h3>保養品掃碼新增</h3>
+    <video id="preview" autoplay playsinline></video>
 
+    <div class="row">
+      <label>條碼
+        <input id="barcode" placeholder="自動帶入，或手動輸入" />
+      </label>
+    </div>
 
-document.getElementById('btn').onclick = load;
-window.addEventListener('load', load);
+    <div class="row">
+      <button id="btnNoBarcode" type="button">沒有條碼（建立內部ID）</button>
+    </div>
 
+    <div class="row">
+      <label>品名
+        <input id="name" placeholder="可留白，會自動帶或之後補" />
+      </label>
+    </div>
 
-async function load(){
-const q = document.getElementById('q').value.trim();
-const status = document.getElementById('status').value;
-const url = new URL(GAS_LIST);
-if (q) url.searchParams.set('q', q);
-if (status) url.searchParams.set('status', status);
-const res = await fetch(url);
-const json = await res.json();
-const box = document.getElementById('list');
-box.innerHTML = '';
-json.data.forEach(item => box.appendChild(render(item)));
-}
+    <div class="row">
+      <label>效期
+        <input id="expiry" type="date" />
+      </label>
+    </div>
 
+    <div class="row">
+      <label>開封日
+        <input id="opened" type="date" />
+      </label>
+    </div>
 
-function render(it){
-const d = daysToExpiry(it.expiry_date);
-const badge = document.createElement('div');
-badge.className = 'badge ' + (isNaN(d) ? 'ok' : d<0 ? 'danger' : d<=30 ? 'warn' : 'ok');
-badge.textContent = isNaN(d) ? '無效期' : d<0 ? `已過期 ${-d} 天` : `D-${d}`;
+    <div class="row">
+      <label>分類
+        <select id="cat">
+          <option>精華</option>
+          <option>化妝水</option>
+          <option>乳液</option>
+          <option>面膜</option>
+          <option>防曬</option>
+          <option>其他</option>
+        </select>
+      </label>
+    </div>
 
+    <div class="row">
+      <label>備註
+        <textarea id="note" rows="2" placeholder="可用語音輸入"></textarea>
+      </label>
+    </div>
 
-const img = document.createElement('img');
-img.src = it.image_url || 'https://dummyimage.com/600x400/eeeeee/aaaaaa&text=%20';
-img.alt = it.name || '';
+    <div class="row">
+      <button id="submit">快速送出</button>
+    </div>
 
+    <div class="hint" id="status"></div>
+  </div>
 
-const div = document.createElement('div');
-div.className = 'card';
-div.innerHTML = `
-<div>${badge.outerHTML}</div>
-<div style="margin:8px 0"><strong>${escapeHtml(it.name||'(未命名)')}</strong>${it.brand? ' / '+escapeHtml(it.brand):''}</div>
-<div class="meta">分類：${escapeHtml(it.category||'-')}｜條碼：${escapeHtml(it.barcode||'-')}</div>
-<div class="meta">效期：${escapeHtml(it.expiry_date||'-')}｜狀態：${escapeHtml(it.status||'-')}</div>
-`;
-div.prepend(img);
-return div;
-}
+  <script type="module">
+    import { BrowserMultiFormatReader } from "https://cdn.jsdelivr.net/npm/@zxing/library@latest/+esm";
+    const codeReader = new BrowserMultiFormatReader();
+    const video = document.getElementById("preview");
+    const barcode = document.getElementById("barcode");
+    const opened = document.getElementById("opened");
+    const status = document.getElementById("status");
+    opened.value = new Date().toISOString().slice(0, 10);
 
+    // ⚠️ 修改成你的 Google Apps Script 部署網址
+    const GAS_ENDPOINT = "https://script.google.com/macros/s/XXXXXXXXXXXXXXXXXXXX/exec";
 
-function daysToExpiry(dateStr){
-if (!dateStr) return NaN;
-const d = new Date(dateStr + 'T00:00:00');
-const ms = d - new Date();
-return Math.floor(ms / (1000*60*60*24));
-}
-function escapeHtml(s){return (s||'').replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
-</script>
+    // 開啟鏡頭
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const backCam = devices.find(
+        (d) => d.kind === "videoinput" && /back|rear|環境/i.test(d.label)
+      );
+      const constraints = {
+        video: backCam
+          ? { deviceId: backCam.deviceId }
+          : { facingMode: "environment" },
+      };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      video.srcObject = stream;
+
+      codeReader.decodeFromVideoDevice(null, "preview", (result, err) => {
+        if (result) {
+          barcode.value = result.getText();
+          if (navigator.vibrate) navigator.vibrate(60);
+          status.textContent = "✅ 已掃到條碼：" + barcode.value;
+        }
+      });
+    } catch (e) {
+      status.textContent = "⚠️ 無法開啟相機：" + e;
+    }
+
+    // 沒有條碼的模式
+    document.getElementById("btnNoBarcode").onclick = () => {
+      barcode.value = "";
+      status.textContent = "👉 將以內部ID建立（無條碼）";
+    };
+
+    // 提交資料
+    document.getElementById("submit").onclick = async () => {
+      const payload = {
+        id: undefined, // 讓後端自動產生
+        barcode: barcode.value.trim(),
+        name: document.getElementById("name").value.trim(),
+        expiry: document.getElementById("expiry").value,
+        opened: document.getElementById("opened").value,
+        category: document.getElementById("cat").value,
+        note: document.getElementById("note").value.trim(),
+        ts: new Date().toISOString(),
+      };
+
+      if (!payload.barcode && !payload.name) {
+        alert("沒有條碼時請至少填『品名』");
+        return;
+      }
+
+      try {
+        const res = await fetch(GAS_ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const json = await res.json();
+        if (json.ok) {
+          alert("✅ 新增成功：" + (json.data.name || "(未命名)"));
+          document.getElementById("name").value = "";
+          document.getElementById("expiry").value = "";
+          document.getElementById("note").value = "";
+        } else {
+          alert("送出失敗：" + (json.error || "未知錯誤"));
+        }
+      } catch (e) {
+        alert("連線失敗：" + e);
+      }
+    };
+  </script>
 </body>
+</html>
