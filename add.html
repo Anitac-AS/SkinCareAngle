@@ -17,8 +17,6 @@
     .progress{height:6px;background:#eee;border-radius:6px;overflow:hidden}
     .bar{height:100%;width:0;background:#1565c0}
   </style>
-  <!-- Tesseract.js：瀏覽器端 OCR（英文/多語環境都可） -->
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
   <div class="card">
@@ -38,11 +36,11 @@
     </div>
 
     <div class="row"><label>品名
-      <input id="name" placeholder="OCR 會嘗試帶入；可手動輸入/修改" />
+      <input id="name" placeholder="可手動輸入；亦可用『雲端 AI 辨識』帶入" />
     </label></div>
 
     <div class="row"><label>品牌
-      <input id="brand" placeholder="OCR 會嘗試帶入；可手動輸入/修改" />
+      <input id="brand" placeholder="可手動輸入；亦可用『雲端 AI 辨識』帶入" />
     </label></div>
 
     <div class="row"><label>效期
@@ -64,16 +62,14 @@
     </label></div>
 
     <div class="actions">
-      <button id="btnOcr" type="button" class="secondary">重新辨識</button>
+      <button id="btnAi" type="button" class="secondary">使用雲端 AI 辨識</button>
       <button id="submit">送出</button>
     </div>
-
-    <div class="hint" id="hint2">＊OCR 只在欄位「目前為空」時帶入結果，不會覆蓋你已輸入的內容。</div>
   </div>
 
   <script>
-    // 換成你的 GAS /exec URL
-    const GAS_ENDPOINT = "https://script.google.com/macros/s/XXXXXXXXXXXXXXXX/exec";
+    // 換成你的 Apps Script /exec URL
+    const GAS_ENDPOINT = "https://script.google.com/macros/s/AKfycbxtzZ7n6O7a_uGonhJEG6OwcPdLHWhK97zyJWTjXdDYKh5UqFl9-IvzmvWyHv0FIZQY/exec";
 
     const fileEl = document.getElementById('file');
     const imgEl  = document.getElementById('preview');
@@ -89,80 +85,51 @@
       if (!f) return;
       latestImageBlob = f;
 
-      // 預覽
       const url = URL.createObjectURL(f);
       imgEl.src = url;
       imgEl.style.display = 'block';
-      status.textContent = '影像載入完成，開始 OCR…';
       barEl.style.width = '0%';
-
-      await runOCR(f);
+      status.textContent = '已載入圖片';
     });
-
-    document.getElementById('btnOcr').onclick = async () => {
-      if (!latestImageBlob) { alert('請先選擇相片'); return; }
-      await runOCR(latestImageBlob, /*force*/true);
-    };
 
     function setIfEmpty(input, value){
       if (!input.value && value) input.value = value;
     }
 
-    async function runOCR(blob){
+    // 雲端 AI 辨識（不寫入）
+    document.getElementById('btnAi').onclick = async () => {
+      const f = fileEl.files[0];
+      if (!f) { alert('請先拍照或選擇相片'); return; }
+
+      const fd = new FormData();
+      fd.append('mode', 'analyzeOnly');
+      fd.append('photo', f, f.name || 'photo.jpg');
+      status.textContent = '上傳到雲端辨識中…';
+
       try{
-        barEl.style.width = '5%';
-        const { data } = await Tesseract.recognize(blob, 'eng+chi_tra+chi_sim', {
-          logger: m => {
-            if (m.status === 'recognizing text' && m.progress){
-              barEl.style.width = Math.round(m.progress*100) + '%';
-            }
-          }
-        });
-        barEl.style.width = '100%';
-        status.textContent = 'OCR 完成';
-
-        const text = (data.text || '').replace(/\s+/g,' ').trim();
-        // 超簡易 heuristics：取常見品牌與關鍵詞
-        const brand = pickBrand(text);
-        const name  = pickName(text, brand);
-
-        setIfEmpty(brandEl, brand);
-        setIfEmpty(nameEl, name);
+        const res = await fetch(GAS_ENDPOINT, { method:'POST', body: fd });
+        const json = await res.json();
+        if (json.ok && json.ai){
+          setIfEmpty(brandEl, json.ai.brand);
+          setIfEmpty(nameEl,  json.ai.name);
+          status.textContent = `AI 建議：${json.ai.brand || ''} / ${json.ai.name || ''}`;
+        }else{
+          status.textContent = 'AI 辨識失敗：' + (json.error || '無建議');
+        }
       }catch(e){
-        status.textContent = 'OCR 失敗：' + e;
+        status.textContent = 'AI 連線失敗：' + e;
       }
-    }
+    };
 
-    // 你可以把這份品牌表放大（或改從後端拉 mapping 的品牌清單）
-    const BRAND_HINTS = [
-      'CLARINS','克蘭詩','資生堂','SHISEIDO','LANCOME','蘭蔻','SK-II','SKII','ESTEE LAUDER','雅詩蘭黛',
-      'KIEHL','KIEHL\'S','雪花秀','SULWHASOO','LA ROCHE-POSAY','理膚寶水','BIOTHERM','碧兒泉','DR.WU','ORIGINS',
-      'INNISFREE','OLAY','SENKA','ELIXIR','HABA','CETAPHIL','Curel','悦詩風吟','YSL','DIOR','GUERLAIN','植村秀'
-    ];
-
-    function pickBrand(text){
-      const upper = text.toUpperCase();
-      const hit = BRAND_HINTS.find(b => upper.includes(b.toUpperCase()));
-      return hit || '';
-    }
-
-    function pickName(text, brand){
-      let t = text;
-      if (brand) t = t.replace(new RegExp(brand, 'ig'), ' ');
-      // 嘗試抓取像樣的片語（英數與中文混合）
-      const match = t.match(/([A-Za-z\u4E00-\u9FFF][A-Za-z0-9\u4E00-\u9FFF\s\-]{6,})/);
-      return match ? match[1].trim() : '';
-    }
-
-    // 送出（multipart/form-data；不設任何自訂 header → 不觸發預檢）
+    // 送出（上傳＋寫入）
     document.getElementById('submit').onclick = async () => {
       const f = fileEl.files[0];
       if (!f) { alert('請先拍照或選擇相片'); return; }
 
       const fd = new FormData();
-      fd.append('mode', 'addPhoto');      // 告訴後端這是照片上傳路徑
-      fd.append('name',   document.getElementById('name').value.trim());
-      fd.append('brand',  document.getElementById('brand').value.trim());
+      fd.append('mode', 'addPhoto');
+      fd.append('name',   nameEl.value.trim());
+      fd.append('brand',  brandEl.value.trim());
       fd.append('expiry', document.getElementById('expiry').value);
       fd.append('opened', document.getElementById('opened').value);
       fd.append('category', document.getElementById('cat').value);
@@ -175,10 +142,11 @@
         if (json.ok){
           alert('✅ 已新增：' + (json.data.name || '(未命名)'));
           // 清空可重填欄位
-          document.getElementById('name').value='';
-          document.getElementById('brand').value='';
+          nameEl.value='';
+          brandEl.value='';
           document.getElementById('expiry').value='';
           document.getElementById('note').value='';
+          status.textContent = '已寫入';
         }else{
           alert('送出失敗：' + (json.error || '未知錯誤'));
         }
