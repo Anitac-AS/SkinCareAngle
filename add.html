@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>保養品拍照新增</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Arial;background:#fafafa;padding:12px}
+    .card{max-width:520px;margin:0 auto;background:#fff;border-radius:14px;padding:16px;box-shadow:0 2px 6px rgba(0,0,0,.08)}
+    .row{margin:10px 0}
+    input,select,textarea,button{width:100%;padding:12px;border-radius:12px;border:1px solid #ddd;box-sizing:border-box}
+    button{border:0;background:#1565c0;color:#fff;font-weight:600;cursor:pointer}
+    button.secondary{background:#666}
+    .preview{width:100%;border-radius:12px;background:#eee;object-fit:cover;max-height:260px}
+    .hint{color:#666;font-size:13px;margin-top:6px}
+    .actions{display:flex;gap:10px;flex-wrap:wrap}
+    .progress{height:6px;background:#eee;border-radius:6px;overflow:hidden}
+    .bar{height:100%;width:0;background:#1565c0}
+  </style>
+  <!-- Tesseract.js：瀏覽器端 OCR（英文/多語環境都可） -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+</head>
+<body>
+  <div class="card">
+    <h3>保養品拍照新增</h3>
+
+    <div class="row">
+      <input id="file" type="file" accept="image/*" capture="environment" />
+    </div>
+
+    <div class="row">
+      <img id="preview" class="preview" alt="預覽圖" style="display:none"/>
+    </div>
+
+    <div class="row">
+      <div class="progress"><div class="bar" id="bar"></div></div>
+      <div class="hint" id="status">請先拍照或選擇相片</div>
+    </div>
+
+    <div class="row"><label>品名
+      <input id="name" placeholder="OCR 會嘗試帶入；可手動輸入/修改" />
+    </label></div>
+
+    <div class="row"><label>品牌
+      <input id="brand" placeholder="OCR 會嘗試帶入；可手動輸入/修改" />
+    </label></div>
+
+    <div class="row"><label>效期
+      <input id="expiry" type="date" />
+    </label></div>
+
+    <div class="row"><label>開封日
+      <input id="opened" type="date" /> <!-- 預設空白 -->
+    </label></div>
+
+    <div class="row"><label>分類
+      <select id="cat">
+        <option>精華</option><option>化妝水</option><option>乳液</option><option>面膜</option><option>防曬</option><option>其他</option>
+      </select>
+    </label></div>
+
+    <div class="row"><label>備註
+      <textarea id="note" rows="2" placeholder="可補充容量、系列等"></textarea>
+    </label></div>
+
+    <div class="actions">
+      <button id="btnOcr" type="button" class="secondary">重新辨識</button>
+      <button id="submit">送出</button>
+    </div>
+
+    <div class="hint" id="hint2">＊OCR 只在欄位「目前為空」時帶入結果，不會覆蓋你已輸入的內容。</div>
+  </div>
+
+  <script>
+    // 換成你的 GAS /exec URL
+    const GAS_ENDPOINT = "https://script.google.com/macros/s/XXXXXXXXXXXXXXXX/exec";
+
+    const fileEl = document.getElementById('file');
+    const imgEl  = document.getElementById('preview');
+    const barEl  = document.getElementById('bar');
+    const status = document.getElementById('status');
+    const nameEl  = document.getElementById('name');
+    const brandEl = document.getElementById('brand');
+
+    let latestImageBlob = null;
+
+    fileEl.addEventListener('change', async () => {
+      const f = fileEl.files[0];
+      if (!f) return;
+      latestImageBlob = f;
+
+      // 預覽
+      const url = URL.createObjectURL(f);
+      imgEl.src = url;
+      imgEl.style.display = 'block';
+      status.textContent = '影像載入完成，開始 OCR…';
+      barEl.style.width = '0%';
+
+      await runOCR(f);
+    });
+
+    document.getElementById('btnOcr').onclick = async () => {
+      if (!latestImageBlob) { alert('請先選擇相片'); return; }
+      await runOCR(latestImageBlob, /*force*/true);
+    };
+
+    function setIfEmpty(input, value){
+      if (!input.value && value) input.value = value;
+    }
+
+    async function runOCR(blob){
+      try{
+        barEl.style.width = '5%';
+        const { data } = await Tesseract.recognize(blob, 'eng+chi_tra+chi_sim', {
+          logger: m => {
+            if (m.status === 'recognizing text' && m.progress){
+              barEl.style.width = Math.round(m.progress*100) + '%';
+            }
+          }
+        });
+        barEl.style.width = '100%';
+        status.textContent = 'OCR 完成';
+
+        const text = (data.text || '').replace(/\s+/g,' ').trim();
+        // 超簡易 heuristics：取常見品牌與關鍵詞
+        const brand = pickBrand(text);
+        const name  = pickName(text, brand);
+
+        setIfEmpty(brandEl, brand);
+        setIfEmpty(nameEl, name);
+      }catch(e){
+        status.textContent = 'OCR 失敗：' + e;
+      }
+    }
+
+    // 你可以把這份品牌表放大（或改從後端拉 mapping 的品牌清單）
+    const BRAND_HINTS = [
+      'CLARINS','克蘭詩','資生堂','SHISEIDO','LANCOME','蘭蔻','SK-II','SKII','ESTEE LAUDER','雅詩蘭黛',
+      'KIEHL','KIEHL\'S','雪花秀','SULWHASOO','LA ROCHE-POSAY','理膚寶水','BIOTHERM','碧兒泉','DR.WU','ORIGINS',
+      'INNISFREE','OLAY','SENKA','ELIXIR','HABA','CETAPHIL','Curel','悦詩風吟','YSL','DIOR','GUERLAIN','植村秀'
+    ];
+
+    function pickBrand(text){
+      const upper = text.toUpperCase();
+      const hit = BRAND_HINTS.find(b => upper.includes(b.toUpperCase()));
+      return hit || '';
+    }
+
+    function pickName(text, brand){
+      let t = text;
+      if (brand) t = t.replace(new RegExp(brand, 'ig'), ' ');
+      // 嘗試抓取像樣的片語（英數與中文混合）
+      const match = t.match(/([A-Za-z\u4E00-\u9FFF][A-Za-z0-9\u4E00-\u9FFF\s\-]{6,})/);
+      return match ? match[1].trim() : '';
+    }
+
+    // 送出（multipart/form-data；不設任何自訂 header → 不觸發預檢）
+    document.getElementById('submit').onclick = async () => {
+      const f = fileEl.files[0];
+      if (!f) { alert('請先拍照或選擇相片'); return; }
+
+      const fd = new FormData();
+      fd.append('mode', 'addPhoto');      // 告訴後端這是照片上傳路徑
+      fd.append('name',   document.getElementById('name').value.trim());
+      fd.append('brand',  document.getElementById('brand').value.trim());
+      fd.append('expiry', document.getElementById('expiry').value);
+      fd.append('opened', document.getElementById('opened').value);
+      fd.append('category', document.getElementById('cat').value);
+      fd.append('note',   document.getElementById('note').value.trim());
+      fd.append('photo',  f, f.name || 'photo.jpg');
+
+      try{
+        const res = await fetch(GAS_ENDPOINT, { method:'POST', body: fd });
+        const json = await res.json();
+        if (json.ok){
+          alert('✅ 已新增：' + (json.data.name || '(未命名)'));
+          // 清空可重填欄位
+          document.getElementById('name').value='';
+          document.getElementById('brand').value='';
+          document.getElementById('expiry').value='';
+          document.getElementById('note').value='';
+        }else{
+          alert('送出失敗：' + (json.error || '未知錯誤'));
+        }
+      }catch(e){
+        alert('連線失敗：' + e);
+      }
+    };
+  </script>
+</body>
+</html>
