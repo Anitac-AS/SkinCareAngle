@@ -13,7 +13,7 @@
     button{border:0;background:#1565c0;color:#fff;font-weight:600;cursor:pointer}
     button.secondary{background:#666}
     .hint{color:#666;font-size:13px;margin-top:6px}
-    .imgbox{margin:8px 0}
+    .imgbox{margin:8px 0;display:none}
     .imgbox img{width:100%;max-height:180px;object-fit:cover;border-radius:10px;background:#eee}
     .actions{display:flex;gap:10px}
   </style>
@@ -28,7 +28,7 @@
       <button id="btnStop" class="secondary">停止掃描</button>
     </div>
 
-    <div class="imgbox" id="imgBox" style="display:none">
+    <div class="imgbox" id="imgBox">
       <img id="prodImg" alt="商品圖片"/>
     </div>
 
@@ -42,11 +42,11 @@
     </div>
 
     <div class="row"><label>品名
-      <input id="name" placeholder="掃到會自動帶；也可手動/語音輸入" />
+      <input id="name" placeholder="若查到會自動帶；也可手動/語音輸入" />
     </label></div>
 
     <div class="row"><label>品牌
-      <input id="brand" placeholder="若能查到會自動帶" />
+      <input id="brand" placeholder="若查到會自動帶" />
     </label></div>
 
     <div class="row"><label>效期
@@ -54,7 +54,7 @@
     </label></div>
 
     <div class="row"><label>開封日
-      <input id="opened" type="date" />
+      <input id="opened" type="date" /> <!-- 預設留空 -->
     </label></div>
 
     <div class="row"><label>分類
@@ -80,20 +80,22 @@
 
     const video   = document.getElementById("preview");
     const barcode = document.getElementById("barcode");
-    const opened  = document.getElementById("opened");
+    const nameEl  = document.getElementById("name");
+    const brandEl = document.getElementById("brand");
     const status  = document.getElementById("status");
     const imgBox  = document.getElementById("imgBox");
     const prodImg = document.getElementById("prodImg");
-    opened.value = new Date().toISOString().slice(0,10);
 
-    // 換成你的 Apps Script Web App URL（/exec）
+    // 換成你的 Apps Script /exec URL
     const GAS_ENDPOINT = "https://script.google.com/macros/s/AKfycbxtzZ7n6O7a_uGonhJEG6OwcPdLHWhK97zyJWTjXdDYKh5UqFl9-IvzmvWyHv0FIZQY/exec";
 
     let stream = null;
     let scanning = false;
+    let handledThisScan = false;
 
     async function startScan(){
       if (scanning) return;
+      handledThisScan = false;
       try{
         const devices = await navigator.mediaDevices.enumerateDevices();
         const backCam = devices.find(d => d.kind === "videoinput" && /back|rear|環境/i.test(d.label));
@@ -104,12 +106,13 @@
         status.textContent = "相機已啟用，請對準條碼…";
 
         codeReader.decodeFromVideoDevice(null, "preview", (result, err) => {
-          if (result){
+          if (result && !handledThisScan){
+            handledThisScan = true;
             barcode.value = result.getText();
             if (navigator.vibrate) navigator.vibrate(60);
-            status.textContent = "✅ 已掃到條碼：" + barcode.value + "（已自動停止掃描）";
+            status.textContent = "✅ 已掃到條碼：" + barcode.value + "（已自動停止掃描並查資料）";
             stopScan();               // 掃到即停
-            lookup();                 // 立刻查資料並帶入
+            lookup();                 // 立刻查資料（不會覆蓋你已輸入的文字）
           }
         });
       }catch(e){
@@ -138,43 +141,78 @@
 
     document.getElementById("btnLookup").onclick = lookup;
 
-    // 即時查詢（不存檔）：向 GAS 要 OBF/Mapping 帶入資料
+    // 只在欄位「目前為空」時才寫入，避免洗掉你手動輸入
+    function setIfEmpty(inputEl, val){
+      if (!inputEl.value && val) inputEl.value = val;
+    }
+
+    // 先試 GAS lookup；失敗就打 OBF 端點
     async function lookup(){
       const bc = barcode.value.trim();
       if (!bc){ alert("請先輸入或掃描條碼"); return; }
+
       try{
+        // 1) 嘗試 GAS lookup（如果你尚未在 app.gs 寫這個分支，會回錯誤 → 進入 catch）
         const url = `${GAS_ENDPOINT}?mode=lookup&barcode=${encodeURIComponent(bc)}`;
-        const res = await fetch(url);                 // GET，避免 CORS 預檢
-        const json = await res.json();
-        if (json.ok && json.data){
-          const d = json.data;
-          document.getElementById("name").value  = d.name  || "";
-          document.getElementById("brand").value = d.brand || "";
-          if (d.image_url){
-            prodImg.src = d.image_url;
-            imgBox.style.display = "block";
+        const res = await fetch(url);
+        if (res.ok){
+          const json = await res.json();
+          if (json && json.ok && json.data){
+            applyLookup(json.data, /*from*/ 'GAS');
+            return;
+          }
+        }
+        throw new Error('GAS lookup not available');
+      }catch{
+        // 2) 直接查 OBF（v2→v0）
+        try{
+          const fields = 'product_name,product_name_zh,product_name_zh-TW,brands,ingredients_text,ingredients_text_zh,ingredients_text_zh-TW,image_url,code';
+          const v2 = await fetch(`https://world.openbeautyfacts.org/api/v2/product/${encodeURIComponent(bc)}?fields=${encodeURIComponent(fields)}`);
+          let data = v2.ok ? await v2.json() : null;
+          if (!(data && (data.product))) {
+            const v0 = await fetch(`https://world.openbeautyfacts.org/api/v0/product/${encodeURIComponent(bc)}.json?fields=${encodeURIComponent(fields)}`);
+            data = v0.ok ? await v0.json() : null;
+          }
+          if (data && data.product){
+            const p = data.product;
+            const payload = {
+              name: p['product_name_zh-TW'] || p['product_name_zh'] || p['product_name'] || '',
+              brand: p['brands'] || '',
+              image_url: p['image_url'] || '',
+              source: 'obf'
+            };
+            applyLookup(payload, /*from*/ 'OBF');
           }else{
+            status.textContent = "查無資料，可手動輸入。";
             imgBox.style.display = "none";
           }
-          status.textContent = `📦 已帶入：${d.source || "-"} ${d.name || ""}`;
-        }else{
-          status.textContent = "查無資料，可手動輸入。";
-          imgBox.style.display = "none";
+        }catch(e2){
+          status.textContent = "查詢失敗：" + e2;
         }
-      }catch(e){
-        status.textContent = "查詢失敗：" + e;
       }
     }
 
-    // 送出（存檔）
+    function applyLookup(d, from){
+      setIfEmpty(nameEl,  d.name);
+      setIfEmpty(brandEl, d.brand);
+      if (d.image_url){
+        prodImg.src = d.image_url;
+        imgBox.style.display = "block";
+      }else{
+        imgBox.style.display = "none";
+      }
+      status.textContent = `📦 已帶入（${from}）：${d.name || ''}`;
+    }
+
+    // 送出（存檔）— 使用 POST，且不設定 Content-Type（避免 CORS 預檢）
     document.getElementById("submit").onclick = async ()=>{
       const payload = {
-        id: undefined, // 讓後端自動產生
+        id: undefined,
         barcode: barcode.value.trim(),
-        name: document.getElementById("name").value.trim(),
-        brand: document.getElementById("brand").value.trim(),
+        name: nameEl.value.trim(),
+        brand: brandEl.value.trim(),
         expiry: document.getElementById("expiry").value,
-        opened: document.getElementById("opened").value,
+        opened: document.getElementById("opened").value,   // 允許空白
         category: document.getElementById("cat").value,
         note: document.getElementById("note").value.trim(),
         ts: new Date().toISOString(),
@@ -184,18 +222,16 @@
         return;
       }
       try{
-        const res = await fetch(GAS_ENDPOINT, {
-          method: "POST",
-          // 不設 Content-Type，避免觸發 CORS 預檢
-          body: JSON.stringify(payload)
-        });
+        const res = await fetch(GAS_ENDPOINT, { method:"POST", body: JSON.stringify(payload) });
         const json = await res.json();
         if (json.ok){
           alert("✅ 新增成功：" + (json.data.name || "(未命名)"));
-          document.getElementById("name").value="";
-          document.getElementById("brand").value="";
-          document.getElementById("expiry").value="";
-          document.getElementById("note").value="";
+          // 清空只清「可能想重填」的欄位；不觸及你剛手動鍵入的其他欄位
+          nameEl.value = "";
+          brandEl.value = "";
+          document.getElementById("expiry").value = "";
+          document.getElementById("note").value = "";
+          imgBox.style.display = "none";
         }else{
           alert("送出失敗：" + (json.error || "未知錯誤"));
         }
@@ -203,9 +239,6 @@
         alert("連線失敗：" + e);
       }
     };
-
-    // 預設就啟用一次掃描，掃到會自動停
-    startScan();
   </script>
 </body>
 </html>
