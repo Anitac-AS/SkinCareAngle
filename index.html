@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <title>保養品快速建檔工具</title>
   
-        <script type="text/javascript" 
-          src="https://script.google.com/macros/s/AKfycbyFfj4pKcDgA1AMEax5U3dt4qLZnxY9UUnmE7zyzjtAY65GnJWzWcthh2sfD4RizewV/externalload"></script>
+      <script type="text/javascript" 
+          src="https://script.google.com/macros/s/YOUR_WEB_APP_ID/externalload"></script>
       <script src="https://apis.google.com/js/api.js"></script> 
 
   <style>
@@ -118,7 +118,7 @@ textarea {
   <div class="container">
     <h1 class="header">📸 快速建檔</h1>
     
-        <form id="cosmeticForm"> 
+    <form id="cosmeticForm"> 
       
       <section class="photo-section">
         <label for="photoFile" class="file-label">點擊拍照或上傳圖片</label>
@@ -146,7 +146,7 @@ textarea {
             <option value="">請選擇</option>
             <option value="精華液">精華液</option>
             <option value="化妝水">化妝水</option>
-            <option value="乳液/面霜">乳液/面霜</option>
+  公           <option value="乳液/面霜">乳液/面霜</option>
             <option value="眼霜">眼霜</option>
             <option value="試用品">試用品</option>
             <option value="其他">其他</option>
@@ -175,7 +175,7 @@ textarea {
   </div>
   
   <div style="text-align: center; margin-top: 20px;">
-        <a href="https://anitac-as.github.io/SkinCareAngle/list.html" style="color:#007bff; text-decoration: none; font-weight: bold; font-size: 1.1em;">
+        <a href="./list.html" style="color:#007bff; text-decoration: none; font-weight: bold; font-size: 1.1em;">
         查看所有產品清單
     </a>
   </div>
@@ -196,7 +196,7 @@ document.getElementById('cosmeticForm').addEventListener('submit', function(e) {
   // 創建 FormData 物件來處理檔案和欄位資料
   const formData = new FormData(form);
   
-  // 外部執行環境下，google.script.run 會自動處理檔案上傳到後端 processFormSubmit
+  // 外部執行環境下，直接使用 google.script.run，Apps Script 會自動處理檔案上傳
   google.script.run
       .withSuccessHandler(onSuccess)
       .withFailureHandler(onFailure)
