@@ -4,8 +4,12 @@
   <base target="_top">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <title>保養品快速建檔工具</title>
+  
+        <script type="text/javascript" 
+          src="https://script.google.com/macros/s/AKfycbyFfj4pKcDgA1AMEax5U3dt4qLZnxY9UUnmE7zyzjtAY65GnJWzWcthh2sfD4RizewV/externalload"></script>
+      <script src="https://apis.google.com/js/api.js"></script> 
+
   <style>
-    /* 保持 CSS 樣式不變 */
     body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
   background-color: #f4f6f8; 
@@ -113,6 +117,7 @@ textarea {
 <body>
   <div class="container">
     <h1 class="header">📸 快速建檔</h1>
+    
         <form id="cosmeticForm"> 
       
       <section class="photo-section">
@@ -170,18 +175,12 @@ textarea {
   </div>
   
   <div style="text-align: center; margin-top: 20px;">
-        <a href="https://script.google.com/macros/s/AKfycbyFfj4pKcDgA1AMEax5U3dt4qLZnxY9UUnmE7zyzjtAY65GnJWzWcthh2sfD4RizewV/exec?page=list" style="color:#007bff; text-decoration: none; font-weight: bold; font-size: 1.1em;">
+        <a href="https://anitac-as.github.io/SkinCareAngle/list.html" style="color:#007bff; text-decoration: none; font-weight: bold; font-size: 1.1em;">
         查看所有產品清單
     </a>
-    </div>
+  </div>
 
-    <script src="https://apis.google.com/js/api.js"></script> 
   <script>
-    // VVVV 關鍵修正：定義 Web App URL VVVV
-    // 雖然外部執行不需要這個，但定義一個變數有利於維護
-    const GAS_WEB_APP_URL = '[您的 Web App 部署 URL]'; 
-    // ^^^^ 關鍵修正 ^^^^
-
 
 document.getElementById('cosmeticForm').addEventListener('submit', function(e) {
   e.preventDefault(); // 阻止表單原生提交行為
@@ -197,13 +196,11 @@ document.getElementById('cosmeticForm').addEventListener('submit', function(e) {
   // 創建 FormData 物件來處理檔案和欄位資料
   const formData = new FormData(form);
   
-  // VVVV 關鍵：因為是外部執行，直接使用 google.script.run，Apps Script 會自動處理檔案上傳 VVVV
+  // 外部執行環境下，google.script.run 會自動處理檔案上傳到後端 processFormSubmit
   google.script.run
       .withSuccessHandler(onSuccess)
       .withFailureHandler(onFailure)
       .processFormSubmit(formData);
-  // ^^^^ 關鍵 ^^^^
-
 });
 
 // 成功處理後的處理器
@@ -213,6 +210,10 @@ function onSuccess(response) {
   
   // 清空表單
   document.getElementById('cosmeticForm').reset();
+  
+  // 重設圖片選取提示
+  document.querySelector('.file-label').textContent = '點擊拍照或上傳圖片';
+  document.getElementById('aiStatus').innerHTML = '';
   
   // 顯示成功訊息
   loadingStatus.innerHTML = `✅ ${response.message || '建檔成功！'}`;
@@ -246,7 +247,6 @@ document.getElementById('photoFile').addEventListener('change', function() {
 
 // --- AI 辨識按鈕功能 ---
 document.getElementById('aiDetectBtn').addEventListener('click', function() {
-    // ... (保留 AI 邏輯，與提交邏輯類似，不需要 setUploadMode)
     const aiStatus = document.getElementById('aiStatus');
     const photoFile = document.getElementById('photoFile');
 
@@ -266,7 +266,7 @@ document.getElementById('aiDetectBtn').addEventListener('click', function() {
     reader.onload = function(e) {
         const base64Data = e.target.result.split(',')[1];
         
-        // 呼叫 GAS 伺服器端函式
+        // 呼叫 GAS 伺服器端函式 (AI 辨識)
         google.script.run
             .withSuccessHandler(onAiSuccess)
             .withFailureHandler(onAiFailure)
