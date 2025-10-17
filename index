@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>保養品快速建檔工具</title>
+  <style>
+    /* 保持 CSS 樣式不變 */
+    body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  background-color: #f4f6f8; 
+  margin: 0;
+  padding: 0;
+}
+
+.container {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.header {
+  text-align: center;
+  color: #007bff; 
+  margin-bottom: 30px;
+  font-size: 1.8em;
+}
+
+/* 輸入群組樣式 */
+.input-group {
+  margin-bottom: 15px;
+}
+
+label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+  color: #333;
+  font-size: 1.1em;
+}
+
+input[type="text"], 
+input[type="date"], 
+select, 
+textarea {
+  width: 100%;
+  padding: 12px;
+  margin-top: 5px;
+  box-sizing: border-box;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 1.1em; 
+}
+
+textarea {
+  resize: vertical;
+}
+
+/* 按鈕樣式：適合單手點擊的大尺寸 */
+.action-btn {
+  width: 100%;
+  padding: 15px;
+  border: none;
+  border-radius: 10px;
+  font-size: 1.2em;
+  font-weight: bold;
+  cursor: pointer;
+  margin-top: 15px;
+  transition: background-color 0.3s;
+}
+
+.detect-btn {
+  background-color: #ffc107; 
+  color: #333;
+}
+
+.submit-btn {
+  background-color: #28a745; 
+  color: white;
+  margin-bottom: 50px; 
+}
+
+.detect-btn:hover { background-color: #e0a800; }
+.submit-btn:hover { background-color: #1e7e34; }
+
+/* 隱藏原生檔案上傳按鈕，使用客製化的 Label */
+#photoFile {
+  display: none; 
+}
+
+.file-label {
+  display: block;
+  text-align: center;
+  padding: 20px;
+  background-color: #e9ecef; 
+  border: 2px dashed #adb5bd;
+  border-radius: 10px;
+  color: #6c757d;
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 1.1em;
+  margin-bottom: 10px;
+}
+
+.status-msg {
+  margin-top: 10px;
+  padding: 10px;
+  text-align: center;
+  font-weight: bold;
+}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 class="header">📸 快速建檔</h1>
+        <form id="cosmeticForm"> 
+      
+      <section class="photo-section">
+        <label for="photoFile" class="file-label">點擊拍照或上傳圖片</label>
+        <input type="file" id="photoFile" name="photoFile" accept="image/*" capture="environment" required>
+        <button type="button" id="aiDetectBtn" class="action-btn detect-btn">🤖 雲端 AI 辨識</button>
+        <div id="aiStatus" class="status-msg"></div>
+      </section>
+
+      <section class="info-section">
+        <h2>產品資訊</h2>
+        
+        <div class="input-group">
+          <label for="brand">品牌 *</label>
+          <input type="text" id="brand" name="brand" placeholder="例如：SK-II" required>
+        </div>
+        
+        <div class="input-group">
+          <label for="name">品名 *</label>
+          <input type="text" id="name" name="name" placeholder="例如：青春露" required>
+        </div>
+
+        <div class="input-group">
+          <label for="category">分類</label>
+          <select id="category" name="category">
+            <option value="">請選擇</option>
+            <option value="精華液">精華液</option>
+            <option value="化妝水">化妝水</option>
+            <option value="乳液/面霜">乳液/面霜</option>
+            <option value="眼霜">眼霜</option>
+            <option value="試用品">試用品</option>
+            <option value="其他">其他</option>
+          </select>
+        </div>
+        
+        <div class="input-group">
+          <label for="expiryDate">效期</label>
+          <input type="date" id="expiryDate" name="expiryDate">
+        </div>
+        
+        <div class="input-group">
+          <label for="openDate">開封日</label> 
+          <input type="date" id="openDate" name="openDate">
+        </div>
+        
+        <div class="input-group">
+          <label for="notes">備註</label>
+          <textarea id="notes" name="notes" rows="3" placeholder="例如：適用冬季乾肌，已送出公關品"></textarea>
+        </div>
+      </section>
+      
+      <button type="submit" id="submitBtn" class="action-btn submit-btn">🚀 儲存並送出</button>
+      <div id="loadingStatus" class="status-msg"></div>
+    </form>
+  </div>
+  
+  <div style="text-align: center; margin-top: 20px;">
+        <a href="https://script.google.com/macros/s/AKfycbyFfj4pKcDgA1AMEax5U3dt4qLZnxY9UUnmE7zyzjtAY65GnJWzWcthh2sfD4RizewV/exec?page=list" style="color:#007bff; text-decoration: none; font-weight: bold; font-size: 1.1em;">
+        查看所有產品清單
+    </a>
+    </div>
+
+    <script src="https://apis.google.com/js/api.js"></script> 
+  <script>
+    // VVVV 關鍵修正：定義 Web App URL VVVV
+    // 雖然外部執行不需要這個，但定義一個變數有利於維護
+    const GAS_WEB_APP_URL = '[您的 Web App 部署 URL]'; 
+    // ^^^^ 關鍵修正 ^^^^
+
+
+document.getElementById('cosmeticForm').addEventListener('submit', function(e) {
+  e.preventDefault(); // 阻止表單原生提交行為
+
+  const form = e.target;
+  const submitBtn = document.getElementById('submitBtn');
+  const loadingStatus = document.getElementById('loadingStatus');
+
+  submitBtn.disabled = true;
+  loadingStatus.innerHTML = '正在處理並上傳中... 請稍候';
+  loadingStatus.style.color = '#007bff';
+
+  // 創建 FormData 物件來處理檔案和欄位資料
+  const formData = new FormData(form);
+  
+  // VVVV 關鍵：因為是外部執行，直接使用 google.script.run，Apps Script 會自動處理檔案上傳 VVVV
+  google.script.run
+      .withSuccessHandler(onSuccess)
+      .withFailureHandler(onFailure)
+      .processFormSubmit(formData);
+  // ^^^^ 關鍵 ^^^^
+
+});
+
+// 成功處理後的處理器
+function onSuccess(response) {
+  const loadingStatus = document.getElementById('loadingStatus');
+  document.getElementById('submitBtn').disabled = false;
+  
+  // 清空表單
+  document.getElementById('cosmeticForm').reset();
+  
+  // 顯示成功訊息
+  loadingStatus.innerHTML = `✅ ${response.message || '建檔成功！'}`;
+  loadingStatus.style.color = '#28a745'; 
+  
+  // 3秒後清除訊息
+  setTimeout(() => loadingStatus.innerHTML = '', 3000);
+}
+
+// 失敗處理後的處理器
+function onFailure(error) {
+  const loadingStatus = document.getElementById('loadingStatus');
+  document.getElementById('submitBtn').disabled = false;
+
+  loadingStatus.innerHTML = `❌ 錯誤：${error.message || '建檔失敗。'}`;
+  loadingStatus.style.color = '#dc3545';
+  console.error("GAS 執行失敗詳情：", error);
+}
+
+
+// --- 圖片預覽功能 ---
+document.getElementById('photoFile').addEventListener('change', function() {
+    const fileLabel = document.querySelector('.file-label');
+    const file = this.files[0];
+    if (file) {
+        fileLabel.textContent = `已選取：${file.name}`;
+    } else {
+        fileLabel.textContent = '點擊拍照或上傳圖片';
+    }
+});
+
+// --- AI 辨識按鈕功能 ---
+document.getElementById('aiDetectBtn').addEventListener('click', function() {
+    // ... (保留 AI 邏輯，與提交邏輯類似，不需要 setUploadMode)
+    const aiStatus = document.getElementById('aiStatus');
+    const photoFile = document.getElementById('photoFile');
+
+    if (photoFile.files.length === 0) {
+        aiStatus.innerHTML = '請先選取一張照片！';
+        aiStatus.style.color = '#ffc107';
+        return;
+    }
+    
+    const file = photoFile.files[0];
+    const reader = new FileReader();
+
+    aiStatus.innerHTML = '正在進行 AI 辨識...';
+    aiStatus.style.color = '#007bff';
+    
+    // 讀取檔案為 Base64 字串
+    reader.onload = function(e) {
+        const base64Data = e.target.result.split(',')[1];
+        
+        // 呼叫 GAS 伺服器端函式
+        google.script.run
+            .withSuccessHandler(onAiSuccess)
+            .withFailureHandler(onAiFailure)
+            .callAIDetection(base64Data);
+    };
+    
+    reader.onerror = function() {
+        onAiFailure(new Error("無法讀取圖片檔案。"));
+    };
+
+    reader.readAsDataURL(file); 
+});
+
+// AI 辨識成功處理器
+function onAiSuccess(result) {
+    const aiStatus = document.getElementById('aiStatus');
+    
+    if (result.error) {
+        aiStatus.innerHTML = `❌ 辨識失敗: ${result.error}`;
+        aiStatus.style.color = '#dc3545';
+        return;
+    }
+    
+    // 自動填入欄位
+    if (result.brand) {
+        document.getElementById('brand').value = result.brand;
+    }
+    if (result.name) {
+        document.getElementById('name').value = result.name;
+    }
+
+    aiStatus.innerHTML = `✅ AI 辨識完成！品牌: ${result.brand || '無'}，品名: ${result.name || '無'}`;
+    aiStatus.style.color = '#28a745';
+    setTimeout(() => aiStatus.innerHTML = '', 5000);
+}
+
+// AI 辨識失敗處理器
+function onAiFailure(error) {
+    const aiStatus = document.getElementById('aiStatus');
+    aiStatus.innerHTML = `❌ 系統錯誤：${error.message || 'AI 辨識處理異常。'}`;
+    aiStatus.style.color = '#dc3545';
+}
+  </script>
+</body>
+</html>
