@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>保養品清單</title>
+  
+  <script src="https://apis.google.com/js/api.js"></script>
+
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: #f4f6f8;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      color: #007bff;
+      text-align: center;
+      margin-bottom: 20px;
+      font-size: 1.8em;
+    }
+    /* 清單容器 */
+    #listContainer {
+      display: grid;
+      gap: 15px;
+    }
+    /* 產品卡片 */
+    .card {
+      background-color: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      padding: 15px;
+      display: flex;
+      align-items: center;
+      transition: transform 0.2s;
+    }
+    .card:active {
+        transform: translateY(2px); /* 手機點擊效果 */
+    }
+
+    .photo-thumb {
+      width: 80px;
+      height: 80px;
+      border-radius: 8px;
+      object-fit: cover;
+      margin-right: 15px;
+      flex-shrink: 0;
+    }
+    .details {
+      flex-grow: 1;
+      min-width: 0;
+    }
+    .brand-name {
+      font-weight: bold;
+      font-size: 1.2em;
+      color: #333;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .product-name {
+      color: #6c757d;
+      font-size: 1em;
+      margin-bottom: 5px;
+    }
+    
+    /* 狀態警示標籤 */
+    .status-tag {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 0.85em;
+        font-weight: bold;
+        margin-top: 5px;
+        margin-right: 5px;
+    }
+    /* 顏色定義 */
+    .expired { /* 已過期 */
+        background-color: #dc3545; /* 紅色 */
+        color: white;
+    }
+    .warning { /* 即將過期 (例如 90 天內) */
+        background-color: #ffc107; /* 黃色 */
+        color: #333;
+    }
+    .opened { /* 已開封 */
+        background-color: #17a2b8; /* 淺藍色 */
+        color: white;
+    }
+    .default { /* 正常狀態 */
+        background-color: #28a745; /* 綠色 */
+        color: white;
+    }
+    
+    .loading-text {
+        text-align: center;
+        margin-top: 50px;
+        color: #6c757d;
+    }
+    
+  </style>
+</head>
+<body>
+  <h1>📋 我的保養品清單</h1>
+  
+  <div id="listContainer">
+    <p class="loading-text">正在從 Google Sheet 載入資料...</p>
+  </div>
+  
+  <p style="text-align:center; margin-top:20px;">
+    <a href="./index.html" style="color:#007bff; text-decoration: none; font-weight: bold; font-size: 1em;">
+      ← 返回建檔頁面
+    </a>
+  </p>
+
+  <script>
+    // 定義日期判斷常數
+    const WARNING_DAYS = 90; // 效期在 90 天內視為警告
+    
+    // 頁面載入時執行
+    document.addEventListener('DOMContentLoaded', function() {
+        // 外部頁面直接呼叫 Apps Script 後端的 getCosmeticData
+        google.script.run
+            .withSuccessHandler(renderList)
+            .withFailureHandler(handleError)
+            .getCosmeticData();
+    });
+
+    // 成功讀取資料後渲染清單
+    function renderList(data) {
+        const container = document.getElementById('listContainer');
+        container.innerHTML = ''; // 清空載入中訊息
+
+        if (data.length === 0) {
+            container.innerHTML = '<p class="loading-text">清單目前沒有任何產品。</p>';
+            return;
+        }
+
+        data.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            
+            // 判斷狀態
+            const tagsHtml = getStatusTags(item);
+
+            // 建立卡片內容
+            card.innerHTML = `
+                <img src="${item.照片連結}" class="photo-thumb" onerror="this.onerror=null;this.src='https://via.placeholder.com/80?text=No+Img';">
+                <div class="details">
+                    <div class="brand-name">${item.品牌 || '未知品牌'}</div>
+                    <div class="product-name">${item.品名 || '未命名產品'}</div>
+                    ${tagsHtml}
+                </div>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    // 狀態判斷邏輯 (視覺化核心)
+    function getStatusTags(item) {
+        const today = new Date();
+        const tags = [];
+        
+        // --- 1. 效期判斷 ---
+        if (item.效期) {
+            const expiryDate = new Date(item.效期);
+            const diffTime = expiryDate.getTime() - today.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays < 0) {
+                tags.push(`<span class="status-tag expired">🚨 已過期 (${item.效期})</span>`);
+            } else if (diffDays <= WARNING_DAYS) {
+                tags.push(`<span class="status-tag warning">⚠️ 即將過期 (${diffDays} 天)</span>`);
+            } else {
+                tags.push(`<span class="status-tag default">✔ 效期正常</span>`);
+            }
+        } else {
+            tags.push(`<span class="status-tag default">效期未定</span>`);
+        }
+        
+        // --- 2. 開封日判斷 (只標記已開封狀態) ---
+        if (item.開封日) {
+            tags.push(`<span class="status-tag opened">📦 已開封 (${item.開封日})</span>`);
+        } else {
+            tags.push(`<span class="status-tag default">未開封</span>`);
+        }
+        
+        return tags.join('');
+    }
+
+    // 錯誤處理
+    function handleError(error) {
+        const container = document.getElementById('listContainer');
+        container.innerHTML = `<p class="loading-text" style="color: #dc3545;">資料載入錯誤：${error.message}</p><p class="loading-text">請確認您的 Apps Script Web App 權限是否設定正確。</p>`;
+        console.error("GAS Error:", error);
+    }
+  </script>
+</body>
+</html>
