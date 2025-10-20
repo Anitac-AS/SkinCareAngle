@@ -5,10 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <title>保養品快速建檔工具</title>
   
-      <script type="text/javascript" 
+    <script type="text/javascript" 
           src="https://script.google.com/macros/s/AKfycbyFfj4pKcDgA1AMEax5U3dt4qLZnxY9UUnmE7zyzjtAY65GnJWzWcthh2sfD4RizewV/externalload"></script>
-
-  <script src="https://apis.google.com/js/api.js"></script> 
+    <script src="https://apis.google.com/js/api.js"></script> 
 
   <style>
 /* ... (保留所有 CSS 樣式) ... */
@@ -183,8 +182,7 @@ textarea {
   </div>
 
   <script>
-// VVVV 關鍵修正：這是 Content Service API 的 URL VVVV
-// 請將此處替換為您實際部署的 Web App URL (結尾是 /exec)
+// VVVV 關鍵修正：這是 Content Service API 的 URL (已填入您的 URL) VVVV
 const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyFfj4pKcDgA1AMEax5U3dt4qLZnxY9UUnmE7zyzjtAY65GnJWzWcthh2sfD4RizewV/exec'; 
 // ^^^^ 關鍵修正 ^^^^
 
@@ -204,17 +202,16 @@ document.addEventListener('DOMContentLoaded', function() {
         loadingStatus.innerHTML = '正在處理並上傳中... 請稍候';
         loadingStatus.style.color = '#007bff';
 
-        const formData = new FormData(this); // 使用原生的 FormData
+        const formData = new FormData(this); 
 
         try {
             // 使用原生 Fetch API 提交到 Apps Script 的 doPost 函式
             const response = await fetch(GAS_API_URL, {
                 method: 'POST',
-                // Content-Type: 不需手動設置，fetch 會自動處理 FormData
                 body: formData 
             });
             
-            const result = await response.json(); // 預期後端返回 JSON
+            const result = await response.json(); 
             
             if (result.status === 'success') {
                 onSuccess(result);
@@ -229,10 +226,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 // --------------------------------------------------------------------------------
-// --- AI 辨識邏輯：由於 fetch 無法處理 Base64，仍依賴 google.script.run ---
+// --- AI 辨識邏輯：仍依賴 google.script.run (但現在橋接碼已正確) ---
 // --------------------------------------------------------------------------------
     document.getElementById('aiDetectBtn').addEventListener('click', function() {
-        // ... (AI 辨識邏輯保留不變，它依賴於在 head 中載入的 google.script.run)
         const aiStatus = document.getElementById('aiStatus');
         const photoFile = document.getElementById('photoFile');
 
