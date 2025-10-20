@@ -5,15 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <title>保養品快速建檔工具</title>
   
-    <script type="text/javascript" 
-          src="https://script.google.com/macros/s/AKfycbyFfj4pKcDgA1AMEax5U3dt4qLZnxY9UUnmE7zyzjtAY65GnJWzWcthh2sfD4RizewV/externalload"></script>
-      <script src="https://apis.google.com/js/api.js"></script> 
-
+  <script src="https://apis.google.com/js/api.js"></script> 
+  
   <style>
-/* ... (保留所有 CSS 樣式) ... */
+/* ... (所有 CSS 樣式保留不變) ... */
     body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-  background-color: #f4f6f8; /* 淺灰色背景 */
+  background-color: #f4f6f8; 
   margin: 0;
   padding: 0;
 }
@@ -26,7 +24,7 @@
 
 .header {
   text-align: center;
-  color: #007bff; /* 主題藍色 */
+  color: #007bff; 
   margin-bottom: 30px;
   font-size: 1.8em;
 }
@@ -54,7 +52,7 @@ textarea {
   box-sizing: border-box;
   border: 1px solid #ccc;
   border-radius: 8px;
-  font-size: 1.1em; /* 字體放大，適合手機閱讀 */
+  font-size: 1.1em; 
 }
 
 textarea {
@@ -75,14 +73,14 @@ textarea {
 }
 
 .detect-btn {
-  background-color: #ffc107; /* 黃色警示 */
+  background-color: #ffc107; 
   color: #333;
 }
 
 .submit-btn {
-  background-color: #28a745; /* 綠色成功 */
+  background-color: #28a745; 
   color: white;
-  margin-bottom: 50px; /* 底部空間，便於操作 */
+  margin-bottom: 50px; 
 }
 
 .detect-btn:hover { background-color: #e0a800; }
@@ -97,7 +95,7 @@ textarea {
   display: block;
   text-align: center;
   padding: 20px;
-  background-color: #e9ecef; /* 淺灰背景 */
+  background-color: #e9ecef; 
   border: 2px dashed #adb5bd;
   border-radius: 10px;
   color: #6c757d;
@@ -181,99 +179,126 @@ textarea {
     </a>
   </div>
 
-  <script>
-// VVVV 關鍵修正 (B)：將所有邏輯包裝在 DOMContentLoaded 內，確保 'google' 已載入 VVVV
+  <iframe id="google-script-iframe" 
+          style="display:none;" 
+          src="https://script.google.com/macros/s/AKfycbyFfj4pKcDgA1AMEax5U3dt4qLZnxY9UUnmE7zyzjtAY65GnJWzWcthh2sfD4RizewV/exec"></iframe>
+    <script>
+// VVVV 關鍵修正 (D)：所有邏輯包裝在 iframe 載入完成的事件中 VVVV
 document.addEventListener('DOMContentLoaded', function() {
     
-    // --- 核心事件監聽器 ---
-    document.getElementById('cosmeticForm').addEventListener('submit', function(e) {
-        e.preventDefault(); 
+    // 獲取 iframe 元素
+    const iframe = document.getElementById('google-script-iframe');
 
-        const form = e.target;
-        const submitBtn = document.getElementById('submitBtn');
-        const loadingStatus = document.getElementById('loadingStatus');
-
-        submitBtn.disabled = true;
-        loadingStatus.innerHTML = '正在處理並上傳中... 請稍候';
-        loadingStatus.style.color = '#007bff';
-
-        const formData = new FormData(form);
-        
-        // 呼叫 GAS 後端函式 (外部環境下，不需要 setUploadMode)
-        google.script.run
-            .withSuccessHandler(onSuccess)
-            .withFailureHandler(onFailure)
-            .processFormSubmit(formData);
-    });
-
-    // --- AI 辨識按鈕功能 ---
-    document.getElementById('aiDetectBtn').addEventListener('click', function() {
-        const aiStatus = document.getElementById('aiStatus');
-        const photoFile = document.getElementById('photoFile');
-
-        if (photoFile.files.length === 0) {
-            aiStatus.innerHTML = '請先選取一張照片！';
-            aiStatus.style.color = '#ffc107';
-            return;
-        }
-        
-        const file = photoFile.files[0];
-        const reader = new FileReader();
-
-        aiStatus.innerHTML = '正在進行 AI 辨識...';
-        aiStatus.style.color = '#007bff';
-        
-        reader.onload = function(e) {
-            const base64Data = e.target.result.split(',')[1];
-            
-            // 呼叫 GAS 伺服器端函式 (AI 辨識)
-            google.script.run
-                .withSuccessHandler(onAiSuccess)
-                .withFailureHandler(onAiFailure)
-                .callAIDetection(base64Data);
-        };
-        
-        reader.onerror = function() {
-            onFailure(new Error("無法讀取圖片檔案。"));
-        };
-
-        reader.readAsDataURL(file); 
-    });
-
-    // --- 圖片預覽功能 ---
-    document.getElementById('photoFile').addEventListener('change', function() {
-        const fileLabel = document.querySelector('.file-label');
-        const file = this.files[0];
-        if (file) {
-            fileLabel.textContent = `已選取：${file.name}`;
+    // 狀態：檢查 google.script.run 是否已載入
+    function checkGoogleReady() {
+        if (typeof google !== 'undefined' && typeof google.script !== 'undefined') {
+            console.log("Apps Script 橋接成功。");
+            initializeApp();
         } else {
-            fileLabel.textContent = '點擊拍照或上傳圖片';
+            console.warn("等待 Apps Script 載入...");
+            // 如果 iframe 載入完成，但 google 仍不存在，可能存在安全或網域問題
+            setTimeout(checkGoogleReady, 200); 
         }
-    });
-
-    // --- 函式定義 ---
+    }
     
-    // 成功處理後的處理器
+    // 監聽 IFRAME 載入事件，這是最可靠的時序控制點
+    iframe.onload = checkGoogleReady; 
+
+    // 如果 iframe 已經載入，直接檢查
+    if (iframe.contentWindow.document.readyState === 'complete') {
+         checkGoogleReady();
+    }
+
+
+    // VVVV 應用程式初始化 (所有事件監聽器都在這裡面) VVVV
+    function initializeApp() {
+
+        // --- 核心事件監聽器 ---
+        document.getElementById('cosmeticForm').addEventListener('submit', function(e) {
+            e.preventDefault(); 
+
+            const form = e.target;
+            const submitBtn = document.getElementById('submitBtn');
+            const loadingStatus = document.getElementById('loadingStatus');
+
+            submitBtn.disabled = true;
+            loadingStatus.innerHTML = '正在處理並上傳中... 請稍候';
+            loadingStatus.style.color = '#007bff';
+
+            const formData = new FormData(form);
+            
+            // 呼叫 GAS 後端函式 (外部執行環境下，直接使用 google.script.run)
+            google.script.run
+                .withSuccessHandler(onSuccess)
+                .withFailureHandler(onFailure)
+                .processFormSubmit(formData);
+        });
+
+        // --- AI 辨識按鈕功能 ---
+        document.getElementById('aiDetectBtn').addEventListener('click', function() {
+            const aiStatus = document.getElementById('aiStatus');
+            const photoFile = document.getElementById('photoFile');
+
+            if (photoFile.files.length === 0) {
+                aiStatus.innerHTML = '請先選取一張照片！';
+                aiStatus.style.color = '#ffc107';
+                return;
+            }
+            
+            const file = photoFile.files[0];
+            const reader = new FileReader();
+
+            aiStatus.innerHTML = '正在進行 AI 辨識...';
+            aiStatus.style.color = '#007bff';
+            
+            reader.onload = function(e) {
+                const base64Data = e.target.result.split(',')[1];
+                
+                // 呼叫 GAS 伺服器端函式 (AI 辨識)
+                google.script.run
+                    .withSuccessHandler(onAiSuccess)
+                    .withFailureHandler(onAiFailure)
+                    .callAIDetection(base64Data);
+            };
+            
+            reader.onerror = function() {
+                onFailure(new Error("無法讀取圖片檔案。"));
+            };
+
+            reader.readAsDataURL(file); 
+        });
+
+        // --- 圖片預覽功能 ---
+        document.getElementById('photoFile').addEventListener('change', function() {
+            const fileLabel = document.querySelector('.file-label');
+            const file = this.files[0];
+            if (file) {
+                fileLabel.textContent = `已選取：${file.name}`;
+            } else {
+                fileLabel.textContent = '點擊拍照或上傳圖片';
+            }
+        });
+
+    }
+    // ^^^^ 應用程式初始化結束 ^^^^
+
+
+    // --- 函式定義 (保持在全域，但由初始化函式調用) ---
+    
     function onSuccess(response) {
         const loadingStatus = document.getElementById('loadingStatus');
         document.getElementById('submitBtn').disabled = false;
         
-        // 清空表單
         document.getElementById('cosmeticForm').reset();
-        
-        // 重設圖片選取提示
         document.querySelector('.file-label').textContent = '點擊拍照或上傳圖片';
         document.getElementById('aiStatus').innerHTML = '';
         
-        // 顯示成功訊息
         loadingStatus.innerHTML = `✅ ${response.message || '建檔成功！'}`;
         loadingStatus.style.color = '#28a745'; 
         
-        // 3秒後清除訊息
         setTimeout(() => loadingStatus.innerHTML = '', 3000);
     }
 
-    // 失敗處理後的處理器
     function onFailure(error) {
         const loadingStatus = document.getElementById('loadingStatus');
         document.getElementById('submitBtn').disabled = false;
@@ -283,7 +308,6 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error("GAS 執行失敗詳情：", error);
     }
 
-    // AI 辨識成功處理器
     function onAiSuccess(result) {
         const aiStatus = document.getElementById('aiStatus');
         
@@ -293,7 +317,6 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // 自動填入欄位
         if (result.brand) {
             document.getElementById('brand').value = result.brand;
         }
@@ -306,14 +329,14 @@ document.addEventListener('DOMContentLoaded', function() {
         setTimeout(() => aiStatus.innerHTML = '', 5000);
     }
 
-    // AI 辨識失敗處理器
     function onAiFailure(error) {
         const aiStatus = document.getElementById('aiStatus');
         aiStatus.innerHTML = `❌ 系統錯誤：${error.message || 'AI 辨識處理異常。'}`;
         aiStatus.style.color = '#dc3545';
     }
+
 });
-// ^^^^ 關鍵修正 (B)：所有邏輯都在 DOMContentLoaded 內 ^^^^
+// ^^^^ 關鍵修正 (D) 結束 ^^^^
   </script>
 </body>
 </html>
