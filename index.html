@@ -5,10 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <title>保養品快速建檔工具</title>
   
+      <script type="text/javascript" 
+          src="https://script.google.com/macros/s/AKfycbyFfj4pKcDgA1AMEax5U3dt4qLZnxY9UUnmE7zyzjtAY65GnJWzWcthh2sfD4RizewV/externalload"></script>
+
   <script src="https://apis.google.com/js/api.js"></script> 
-  
+
   <style>
-/* ... (所有 CSS 樣式保留不變) ... */
+/* ... (保留所有 CSS 樣式) ... */
     body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
   background-color: #f4f6f8; 
@@ -179,151 +182,117 @@ textarea {
     </a>
   </div>
 
-  <iframe id="google-script-iframe" 
-          style="display:none;" 
-          src="https://script.google.com/macros/s/AKfycbyFfj4pKcDgA1AMEax5U3dt4qLZnxY9UUnmE7zyzjtAY65GnJWzWcthh2sfD4RizewV/exec"></iframe>
-    <script>
-// VVVV 關鍵修正 (D)：所有邏輯包裝在 iframe 載入完成的事件中 VVVV
+  <script>
+// VVVV 關鍵修正：這是 Content Service API 的 URL VVVV
+// 請將此處替換為您實際部署的 Web App URL (結尾是 /exec)
+const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyFfj4pKcDgA1AMEax5U3dt4qLZnxY9UUnmE7zyzjtAY65GnJWzWcthh2sfD4RizewV/exec'; 
+// ^^^^ 關鍵修正 ^^^^
+
 document.addEventListener('DOMContentLoaded', function() {
-    
-    // 獲取 iframe 元素
-    const iframe = document.getElementById('google-script-iframe');
 
-    // 狀態：檢查 google.script.run 是否已載入
-    function checkGoogleReady() {
-        if (typeof google !== 'undefined' && typeof google.script !== 'undefined') {
-            console.log("Apps Script 橋接成功。");
-            initializeApp();
-        } else {
-            console.warn("等待 Apps Script 載入...");
-            // 如果 iframe 載入完成，但 google 仍不存在，可能存在安全或網域問題
-            setTimeout(checkGoogleReady, 200); 
-        }
-    }
-    
-    // 監聽 IFRAME 載入事件，這是最可靠的時序控制點
-    iframe.onload = checkGoogleReady; 
+// --------------------------------------------------------------------------------
+// --- 核心提交邏輯：使用原生 FETCH API (不依賴 google.script.run) ---
+// --------------------------------------------------------------------------------
+    document.getElementById('cosmeticForm').addEventListener('submit', async function(e) {
+        e.preventDefault(); 
 
-    // 如果 iframe 已經載入，直接檢查
-    if (iframe.contentWindow.document.readyState === 'complete') {
-         checkGoogleReady();
-    }
+        const form = e.target;
+        const submitBtn = document.getElementById('submitBtn');
+        const loadingStatus = document.getElementById('loadingStatus');
 
+        submitBtn.disabled = true;
+        loadingStatus.innerHTML = '正在處理並上傳中... 請稍候';
+        loadingStatus.style.color = '#007bff';
 
-    // VVVV 應用程式初始化 (所有事件監聽器都在這裡面) VVVV
-    function initializeApp() {
+        const formData = new FormData(this); // 使用原生的 FormData
 
-        // --- 核心事件監聽器 ---
-        document.getElementById('cosmeticForm').addEventListener('submit', function(e) {
-            e.preventDefault(); 
-
-            const form = e.target;
-            const submitBtn = document.getElementById('submitBtn');
-            const loadingStatus = document.getElementById('loadingStatus');
-
-            submitBtn.disabled = true;
-            loadingStatus.innerHTML = '正在處理並上傳中... 請稍候';
-            loadingStatus.style.color = '#007bff';
-
-            const formData = new FormData(form);
+        try {
+            // 使用原生 Fetch API 提交到 Apps Script 的 doPost 函式
+            const response = await fetch(GAS_API_URL, {
+                method: 'POST',
+                // Content-Type: 不需手動設置，fetch 會自動處理 FormData
+                body: formData 
+            });
             
-            // 呼叫 GAS 後端函式 (外部執行環境下，直接使用 google.script.run)
-            google.script.run
-                .withSuccessHandler(onSuccess)
-                .withFailureHandler(onFailure)
-                .processFormSubmit(formData);
-        });
-
-        // --- AI 辨識按鈕功能 ---
-        document.getElementById('aiDetectBtn').addEventListener('click', function() {
-            const aiStatus = document.getElementById('aiStatus');
-            const photoFile = document.getElementById('photoFile');
-
-            if (photoFile.files.length === 0) {
-                aiStatus.innerHTML = '請先選取一張照片！';
-                aiStatus.style.color = '#ffc107';
-                return;
-            }
+            const result = await response.json(); // 預期後端返回 JSON
             
-            const file = photoFile.files[0];
-            const reader = new FileReader();
-
-            aiStatus.innerHTML = '正在進行 AI 辨識...';
-            aiStatus.style.color = '#007bff';
-            
-            reader.onload = function(e) {
-                const base64Data = e.target.result.split(',')[1];
-                
-                // 呼叫 GAS 伺服器端函式 (AI 辨識)
-                google.script.run
-                    .withSuccessHandler(onAiSuccess)
-                    .withFailureHandler(onAiFailure)
-                    .callAIDetection(base64Data);
-            };
-            
-            reader.onerror = function() {
-                onFailure(new Error("無法讀取圖片檔案。"));
-            };
-
-            reader.readAsDataURL(file); 
-        });
-
-        // --- 圖片預覽功能 ---
-        document.getElementById('photoFile').addEventListener('change', function() {
-            const fileLabel = document.querySelector('.file-label');
-            const file = this.files[0];
-            if (file) {
-                fileLabel.textContent = `已選取：${file.name}`;
+            if (result.status === 'success') {
+                onSuccess(result);
             } else {
-                fileLabel.textContent = '點擊拍照或上傳圖片';
+                onFailure(new Error(result.message));
             }
-        });
 
-    }
-    // ^^^^ 應用程式初始化結束 ^^^^
+        } catch (error) {
+            onFailure(new Error(`網路連線錯誤或 API 異常：${error.message}`));
+        }
+    });
 
 
-    // --- 函式定義 (保持在全域，但由初始化函式調用) ---
-    
+// --------------------------------------------------------------------------------
+// --- AI 辨識邏輯：由於 fetch 無法處理 Base64，仍依賴 google.script.run ---
+// --------------------------------------------------------------------------------
+    document.getElementById('aiDetectBtn').addEventListener('click', function() {
+        // ... (AI 辨識邏輯保留不變，它依賴於在 head 中載入的 google.script.run)
+        const aiStatus = document.getElementById('aiStatus');
+        const photoFile = document.getElementById('photoFile');
+
+        if (photoFile.files.length === 0) {
+            aiStatus.innerHTML = '請先選取一張照片！';
+            aiStatus.style.color = '#ffc107';
+            return;
+        }
+        
+        const file = photoFile.files[0];
+        const reader = new FileReader();
+
+        aiStatus.innerHTML = '正在進行 AI 辨識...';
+        aiStatus.style.color = '#007bff';
+        
+        reader.onload = function(e) {
+            const base64Data = e.target.result.split(',')[1];
+            
+            // 呼叫 GAS 伺服器端函式 (AI 辨識)
+            google.script.run
+                .withSuccessHandler(onAiSuccess)
+                .withFailureHandler(onAiFailure)
+                .callAIDetection(base64Data);
+        };
+        
+        reader.onerror = function() {
+            onFailure(new Error("無法讀取圖片檔案。"));
+        };
+
+        reader.readAsDataURL(file); 
+    });
+
+// --------------------------------------------------------------------------------
+// --- 輔助函式定義 ---
+// --------------------------------------------------------------------------------
+
     function onSuccess(response) {
         const loadingStatus = document.getElementById('loadingStatus');
         document.getElementById('submitBtn').disabled = false;
-        
         document.getElementById('cosmeticForm').reset();
         document.querySelector('.file-label').textContent = '點擊拍照或上傳圖片';
         document.getElementById('aiStatus').innerHTML = '';
-        
         loadingStatus.innerHTML = `✅ ${response.message || '建檔成功！'}`;
         loadingStatus.style.color = '#28a745'; 
-        
         setTimeout(() => loadingStatus.innerHTML = '', 3000);
     }
 
     function onFailure(error) {
         const loadingStatus = document.getElementById('loadingStatus');
         document.getElementById('submitBtn').disabled = false;
-
         loadingStatus.innerHTML = `❌ 錯誤：${error.message || '建檔失敗。'}`;
         loadingStatus.style.color = '#dc3545';
-        console.error("GAS 執行失敗詳情：", error);
+        console.error("錯誤詳情：", error);
     }
 
     function onAiSuccess(result) {
         const aiStatus = document.getElementById('aiStatus');
-        
-        if (result.error) {
-            aiStatus.innerHTML = `❌ 辨識失敗: ${result.error}`;
-            aiStatus.style.color = '#dc3545';
-            return;
-        }
-        
-        if (result.brand) {
-            document.getElementById('brand').value = result.brand;
-        }
-        if (result.name) {
-            document.getElementById('name').value = result.name;
-        }
-
+        if (result.error) { aiStatus.innerHTML = `❌ 辨識失敗: ${result.error}`; aiStatus.style.color = '#dc3545'; return; }
+        if (result.brand) { document.getElementById('brand').value = result.brand; }
+        if (result.name) { document.getElementById('name').value = result.name; }
         aiStatus.innerHTML = `✅ AI 辨識完成！品牌: ${result.brand || '無'}，品名: ${result.name || '無'}`;
         aiStatus.style.color = '#28a745';
         setTimeout(() => aiStatus.innerHTML = '', 5000);
@@ -334,9 +303,7 @@ document.addEventListener('DOMContentLoaded', function() {
         aiStatus.innerHTML = `❌ 系統錯誤：${error.message || 'AI 辨識處理異常。'}`;
         aiStatus.style.color = '#dc3545';
     }
-
 });
-// ^^^^ 關鍵修正 (D) 結束 ^^^^
   </script>
 </body>
 </html>
