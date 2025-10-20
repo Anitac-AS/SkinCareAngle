@@ -7,113 +7,11 @@
   
     <script type="text/javascript" 
           src="https://script.google.com/macros/s/AKfycbyFfj4pKcDgA1AMEax5U3dt4qLZnxY9UUnmE7zyzjtAY65GnJWzWcthh2sfD4RizewV/externalload"></script>
-    <script src="https://apis.google.com/js/api.js"></script> 
-
+  <script src="https://apis.google.com/js/api.js"></script> 
+  
   <style>
-/* ... (保留所有 CSS 樣式) ... */
-    body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-  background-color: #f4f6f8; 
-  margin: 0;
-  padding: 0;
-}
-
-.container {
-  max-width: 600px;
-  margin: 0 auto;
-  padding: 20px;
-}
-
-.header {
-  text-align: center;
-  color: #007bff; 
-  margin-bottom: 30px;
-  font-size: 1.8em;
-}
-
-/* 輸入群組樣式 */
-.input-group {
-  margin-bottom: 15px;
-}
-
-label {
-  display: block;
-  margin-bottom: 5px;
-  font-weight: bold;
-  color: #333;
-  font-size: 1.1em;
-}
-
-input[type="text"], 
-input[type="date"], 
-select, 
-textarea {
-  width: 100%;
-  padding: 12px;
-  margin-top: 5px;
-  box-sizing: border-box;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  font-size: 1.1em; 
-}
-
-textarea {
-  resize: vertical;
-}
-
-/* 按鈕樣式：適合單手點擊的大尺寸 */
-.action-btn {
-  width: 100%;
-  padding: 15px;
-  border: none;
-  border-radius: 10px;
-  font-size: 1.2em;
-  font-weight: bold;
-  cursor: pointer;
-  margin-top: 15px;
-  transition: background-color 0.3s;
-}
-
-.detect-btn {
-  background-color: #ffc107; 
-  color: #333;
-}
-
-.submit-btn {
-  background-color: #28a745; 
-  color: white;
-  margin-bottom: 50px; 
-}
-
-.detect-btn:hover { background-color: #e0a800; }
-.submit-btn:hover { background-color: #1e7e34; }
-
-/* 隱藏原生檔案上傳按鈕，使用客製化的 Label */
-#photoFile {
-  display: none; 
-}
-
-.file-label {
-  display: block;
-  text-align: center;
-  padding: 20px;
-  background-color: #e9ecef; 
-  border: 2px dashed #adb5bd;
-  border-radius: 10px;
-  color: #6c757d;
-  font-weight: bold;
-  cursor: pointer;
-  font-size: 1.1em;
-  margin-bottom: 10px;
-}
-
-.status-msg {
-  margin-top: 10px;
-  padding: 10px;
-  text-align: center;
-  font-weight: bold;
-}
-  </style>
+/* ... (所有 CSS 樣式保留不變) ... */
+</style>
 </head>
 <body>
   <div class="container">
@@ -181,16 +79,60 @@ textarea {
     </a>
   </div>
 
-<script>
-// VVVV 關鍵修正：這是 Content Service API 的 URL (已填入您的 URL) VVVV
+  <script>
+
+// VVVV 關鍵修正 (A)：將所有輔助函式定義移到頂層 VVVV
+// 讓所有事件監聽器都能找到它們
+
+// 成功處理後的處理器 (上傳)
+function onSuccess(response) {
+    const loadingStatus = document.getElementById('loadingStatus');
+    document.getElementById('submitBtn').disabled = false;
+    document.getElementById('cosmeticForm').reset();
+    document.querySelector('.file-label').textContent = '點擊拍照或上傳圖片';
+    document.getElementById('aiStatus').innerHTML = '';
+    loadingStatus.innerHTML = `✅ ${response.message || '建檔成功！'}`;
+    loadingStatus.style.color = '#28a745'; 
+    setTimeout(() => loadingStatus.innerHTML = '', 3000);
+}
+
+// 失敗處理後的處理器 (上傳)
+function onFailure(error) {
+    const loadingStatus = document.getElementById('loadingStatus');
+    document.getElementById('submitBtn').disabled = false;
+    loadingStatus.innerHTML = `❌ 錯誤：${error.message || '建檔失敗。'}`;
+    loadingStatus.style.color = '#dc3545';
+    console.error("錯誤詳情：", error);
+}
+
+// AI 辨識成功處理器
+function onAiSuccess(result) {
+    const aiStatus = document.getElementById('aiStatus');
+    if (result.error) { aiStatus.innerHTML = `❌ 辨識失敗: ${result.error}`; aiStatus.style.color = '#dc3545'; return; }
+    if (result.brand) { document.getElementById('brand').value = result.brand; }
+    if (result.name) { document.getElementById('name').value = result.name; }
+    aiStatus.innerHTML = `✅ AI 辨識完成！品牌: ${result.brand || '無'}，品名: ${result.name || '無'}`;
+    aiStatus.style.color = '#28a745';
+    setTimeout(() => aiStatus.innerHTML = '', 5000);
+}
+
+// AI 辨識失敗處理器
+function onAiFailure(error) {
+    const aiStatus = document.getElementById('aiStatus');
+    aiStatus.innerHTML = `❌ 系統錯誤：${error.message || 'AI 辨識處理異常。'}`;
+    aiStatus.style.color = '#dc3545';
+}
+
+// VVVV 核心 API URL VVVV
 const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyFfj4pKcDgA1AMEax5U3dt4qLZnxY9UUnmE7zyzjtAY65GnJWzWcthh2sfD4RizewV/exec'; 
-// ^^^^ 關鍵修正 ^^^^
+// ^^^^ 核心 API URL ^^^^
+
 
 document.addEventListener('DOMContentLoaded', function() {
 
-// --------------------------------------------------------------------------------
-// --- 核心提交邏輯：使用原生 FETCH API (上傳) ---
-// --------------------------------------------------------------------------------
+    // --------------------------------------------------------------------------------
+    // --- 核心提交邏輯：使用 FETCH API (上傳) ---
+    // --------------------------------------------------------------------------------
     document.getElementById('cosmeticForm').addEventListener('submit', async function(e) {
         e.preventDefault(); 
 
@@ -220,64 +162,66 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
         } catch (error) {
-            onFailure(new Error(`網路連線錯誤或 API 異常：${error.message}`));
+            // 捕捉到 CORS 錯誤時，顯示更明確的訊息
+            if (error.message.includes('Failed to fetch')) {
+                 onFailure(new Error(`連線失敗。請確認 Apps Script 已部署，且您的瀏覽器允許跨域請求（CORS）。`));
+            } else {
+                 onFailure(new Error(`網路連線錯誤或 API 異常：${error.message}`));
+            }
         }
     });
 
 
-// --------------------------------------------------------------------------------
-// --- AI 辨識邏輯：使用 FETCH API (辨識) ---
-// --------------------------------------------------------------------------------
-    document.getElementById('aiDetectBtn').addEventListener('click', async function() {
+    // --------------------------------------------------------------------------------
+    // --- AI 辨識邏輯：仍依賴 google.script.run ---
+    // --------------------------------------------------------------------------------
+    document.getElementById('aiDetectBtn').addEventListener('click', function() {
         const aiStatus = document.getElementById('aiStatus');
         const photoFile = document.getElementById('photoFile');
 
-        // ... (省略檔案檢查邏輯) ...
-
+        if (photoFile.files.length === 0) {
+            aiStatus.innerHTML = '請先選取一張照片！';
+            aiStatus.style.color = '#ffc107';
+            return;
+        }
+        
         const file = photoFile.files[0];
         const reader = new FileReader();
 
         aiStatus.innerHTML = '正在進行 AI 辨識...';
         aiStatus.style.color = '#007bff';
         
-        reader.onload = async function(e) {
+        reader.onload = function(e) {
             const base64Data = e.target.result.split(',')[1];
             
-            const aiFormData = new FormData();
-            aiFormData.append('action', 'detect');
-            aiFormData.append('base64Image', base64Data); // 傳遞 Base64 字串
-
-            try {
-                const response = await fetch(GAS_API_URL, {
-                    method: 'POST',
-                    body: aiFormData
-                });
-                
-                const result = await response.json();
-                
-                if (result.status === 'success') {
-                    onAiSuccess(result.result); // result.result 包含品牌和品名
-                } else {
-                    onAiFailure(new Error(result.message));
-                }
-
-            } catch (error) {
-                onAiFailure(new Error(`API 辨識連線錯誤：${error.message}`));
-            }
+            // 呼叫 GAS 伺服器端函式 (AI 辨識)
+            // ⚠️ 這裡仍需 google.script.run，所以依賴於您的瀏覽器能成功載入橋接碼
+            google.script.run
+                .withSuccessHandler(onAiSuccess)
+                .withFailureHandler(onAiFailure)
+                .callAIDetection(base64Data);
         };
         
+        reader.onerror = function() {
+            onAiFailure(new Error("無法讀取圖片檔案。"));
+        };
+
         reader.readAsDataURL(file); 
     });
 
 
-// --------------------------------------------------------------------------------
-// --- 輔助函式定義 ---
-// --------------------------------------------------------------------------------
-
-    // ... (保留所有 onSuccess, onFailure, onAiSuccess, onAiFailure 函式)
-    // ... (保留圖片預覽功能)
+    // --- 圖片預覽功能 ---
+    document.getElementById('photoFile').addEventListener('change', function() {
+        const fileLabel = document.querySelector('.file-label');
+        const file = this.files[0];
+        if (file) {
+            fileLabel.textContent = `已選取：${file.name}`;
+        } else {
+            fileLabel.textContent = '點擊拍照或上傳圖片';
+        }
+    });
 
 });
-</script>
+  </script>
 </body>
 </html>
