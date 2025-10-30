@@ -211,7 +211,9 @@ const AddProductForm = ({ userId, db, onSave, onCancel, initialData = null }) =>
             const base64Data = await fileToBase64(formState.file);
             // FIX: Simplified prompt
             const userPrompt = "Analyze this image of a skincare product and extract the brand and product name.";
-            const apiUrl = `https.generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${API_KEY}`;
+            
+            // FIX: Corrected the API URL (added https://)
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${API_KEY}`;
             
             const payload = {
                 contents: [{
@@ -278,7 +280,7 @@ const AddProductForm = ({ userId, db, onSave, onCancel, initialData = null }) =>
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!formState.name || !formState.brand) {
-            setStatusMessage('請至少填寫品牌和產品名称。');
+            setStatusMessage('請至少填寫品牌和產品名稱。');
             return;
         }
 
@@ -571,7 +573,7 @@ const ProductCard = ({ product, onDelete, onEdit, userId, db, isLoading }) => {
                     <div>
                         <p className="text-xs font-bold uppercase tracking-wider bg-gradient-to-r from-teal-600 to-emerald-600 bg-clip-text text-transparent">
                             {product.brand}
-                        </p>
+                        </d'p>
                         <h3 className="text-lg font-extrabold text-gray-900 line-clamp-2 mt-1">
                             {product.name}
                         </h3>
