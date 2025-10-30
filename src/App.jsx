@@ -4,11 +4,45 @@ import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged }
 import { getFirestore, collection, onSnapshot, query, addDoc, doc, deleteDoc, updateDoc, where, getDocs } from 'firebase/firestore';
 import { Loader, Camera, Plus, List, X, Trash2, Edit, CheckCircle, Clock, Package, Calendar } from 'lucide-react';
 
-// --- Global Variable Access (Canvas Environment) ---
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-skincare-app-id';
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+// --- START: Configuration for Local/Vercel Deployment ---
+// 1. 請到 https://firebase.google.com/ 建立您自己的 Firebase 專案
+// 2. 將您專案的 "firebaseConfig" 物件貼到這裡。
+const firebaseConfig = {
+  apiKey: "PASTE_YOUR_API_KEY_HERE",
+  authDomain: "PASTE_YOUR_AUTH_DOMAIN_HERE",
+  projectId: "PASTE_YOUR_PROJECT_ID_HERE", // 這是必填項！
+  storageBucket: "PASTE_YOUR_STORAGE_BUCKET_HERE",
+  messagingSenderId: "PASTE_YOUR_MESSAGING_SENDER_ID_HERE",
+  appId: "PASTE_YOUR_APP_ID_HERE"
+};
+
+// 3. 這個 App 需要 Firestore。請在您的 Firebase 專案中啟用 Firestore。
+// 4. (重要) 設定 Firestore 安全規則 (用於測試)：
+// rules_version = '2';
+// service cloud.firestore {
+//   match /databases/{database}/documents {
+//     match /{document=**} {
+//       allow read, write: if true; // 警告：這僅供測試，不安全。
+//     }
+//   }
+// }
+
+// 5. 這是您的資料儲存路徑，您可以自訂。
+const APP_DATA_PATH = "skincare-app-data"; 
+// --- END: Configuration ---
+
+
+// --- Canvas Environment Fallbacks (for compatibility) ---
+const canvasFirebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
 const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-const API_KEY = ""; // Placeholder for Gemini API Key
+
+// 優先使用您貼上的 local config，如果沒有，才嘗試使用 Canvas 的 config
+const finalFirebaseConfig = (firebaseConfig.projectId && firebaseConfig.projectId !== "PASTE_YOUR_PROJECT_ID_HERE")
+  ? firebaseConfig 
+  : canvasFirebaseConfig;
+
+// API Key (Gemini)
+const API_KEY = ""; // 填入您的 Gemini API Key
 
 // --- Utility Functions ---
 
@@ -90,10 +124,14 @@ const useFirebase = () => {
     const [auth, setAuth] = useState(null);
     const [userId, setUserId] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
+    const [firebaseError, setFirebaseError] = useState(null);
 
     useEffect(() => {
         try {
-            const app = initializeApp(firebaseConfig);
+            if (!finalFirebaseConfig || !finalFirebaseConfig.projectId || finalFirebaseConfig.projectId === "PASTE_YOUR_PROJECT_ID_HERE") {
+                throw new Error("Firebase config is missing. Please paste your Firebase project's config object at the top of src/App.jsx");
+            }
+            const app = initializeApp(finalFirebaseConfig);
             const firestore = getFirestore(app);
             const authInstance = getAuth(app);
 
@@ -104,11 +142,13 @@ const useFirebase = () => {
                 if (user) {
                     setUserId(user.uid);
                 } else if (initialAuthToken) {
+                    // This block is for Canvas environment
                     await signInWithCustomToken(authInstance, initialAuthToken);
-                    setUserId(authInstance.currentUser?.uid || crypto.randomUUID());
+                    setUserId(authInstance.currentUser?.uid);
                 } else {
+                    // Fallback for local dev
                     await signInAnonymously(authInstance);
-                    setUserId(authInstance.currentUser?.uid || crypto.randomUUID());
+                    setUserId(authInstance.currentUser?.uid);
                 }
                 setIsAuthReady(true);
             });
@@ -116,11 +156,12 @@ const useFirebase = () => {
             return () => unsubscribe();
         } catch (error) {
             console.error("Firebase Initialization Error:", error);
-            setIsAuthReady(true);
+            setFirebaseError(error.message);
+            setIsAuthReady(true); // Stop loading
         }
     }, []);
 
-    return { db, auth, userId, isAuthReady };
+    return { db, auth, userId, isAuthReady, firebaseError };
 };
 
 
@@ -244,12 +285,17 @@ const AddProductForm = ({ userId, db, onSave, onCancel, isLoading, setIsLoading,
         };
 
         try {
+            // FIX: Use APP_DATA_PATH for local/Vercel deployment
+            // Path should be collection/document/collection (3 segments)
+            // 'skincare-app-data' (collection) / {userId} (document) / 'products' (collection)
+            const dataPath = `${APP_DATA_PATH}/${userId}/products`;
+            
             if (isEditing) {
-                const productRef = doc(db, `artifacts/${appId}/users/${userId}/products`, initialData.id);
+                const productRef = doc(db, dataPath, initialData.id);
                 await updateDoc(productRef, productData);
                 setStatusMessage('✅ 更新成功！');
             } else {
-                await addDoc(collection(db, `artifacts/${appId}/users/${userId}/products`), productData);
+                await addDoc(collection(db, dataPath), productData);
                 setStatusMessage('✅ 新增成功！');
             }
             setTimeout(() => onSave(), 500);
@@ -461,13 +507,17 @@ const InputField = ({ label, name, type = 'text', value, onChange, required = fa
     </div>
 );
 
-const ProductCard = ({ product, onDelete, onEdit, userId, db, appId, isLoading }) => {
+const ProductCard = ({ product, onDelete, onEdit, userId, db, isLoading }) => {
     const { gradient, statusText, badgeStyle } = getProductStatus(product.expiryDate, product.openedDate);
 
     const handleDelete = async () => {
+        // FIX: Use window.confirm for local dev, as custom modals are complex
         if (window.confirm(`確定要刪除產品 "${product.name}" 嗎？`)) {
             try {
-                await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/products`, product.id));
+                // FIX: Use APP_DATA_PATH
+                // Path should be collection/document/collection (3 segments)
+                const dataPath = `${APP_DATA_PATH}/${userId}/products`;
+                await deleteDoc(doc(db, dataPath, product.id));
             } catch (error) {
                 console.error("Delete Error:", error);
             }
@@ -555,17 +605,19 @@ const ProductCard = ({ product, onDelete, onEdit, userId, db, appId, isLoading }
 // --- Main App Component ---
 
 const App = () => {
-    const { db, userId, isAuthReady } = useFirebase();
+    const { db, userId, isAuthReady, firebaseError } = useFirebase();
     const [view, setView] = useState('list');
     const [products, setProducts] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [editProduct, setEditProduct] = useState(null);
 
     useEffect(() => {
-        if (!isAuthReady || !db || !userId) return;
+        if (!isAuthReady || !db || !userId || firebaseError) return;
 
         setIsLoading(true);
-        const productsColRef = collection(db, `artifacts/${appId}/users/${userId}/products`);
+        // FIX: Use APP_DATA_PATH
+        // Path should be collection/document/collection (3 segments)
+        const productsColRef = collection(db, `${APP_DATA_PATH}/${userId}/products`);
         const q = query(productsColRef);
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -587,7 +639,7 @@ const App = () => {
         });
 
         return () => unsubscribe();
-    }, [isAuthReady, db, userId]);
+    }, [isAuthReady, db, userId, firebaseError]);
 
     const handleSave = useCallback(() => {
         setView('list');
@@ -600,16 +652,25 @@ const App = () => {
     }, []);
 
     let content;
-    if (!isAuthReady) {
+    if (!isAuthReady || firebaseError) {
         content = (
-            <div className="flex flex-col items-center justify-center h-[70vh]">
-                <div className="relative">
-                    <div className="w-16 h-16 border-4 border-teal-200 border-t-teal-600 rounded-full animate-spin"></div>
+            <div className="flex flex-col items-center justify-center h-[70vh] p-4">
+                <div className="relative mb-6">
+                    <div className="w-16 h-16 border-4 border-red-200 rounded-full"></div>
                     <div className="absolute inset-0 flex items-center justify-center">
-                        <Package className="w-8 h-8 text-teal-600" />
+                        <X className="w-8 h-8 text-red-600" />
                     </div>
                 </div>
-                <p className="mt-6 text-gray-600 font-medium">正在準備雲端服務...</p>
+                <p className="mt-6 text-red-700 font-semibold text-lg text-center">
+                    Firebase 載入失敗
+                </p>
+                <p className="mt-2 text-gray-600 text-sm text-center">
+                    {firebaseError 
+                        ? (firebaseError.includes("config is missing") 
+                            ? "錯誤：找不到 Firebase 設定。請檢查您是否已將設定檔貼入 src/App.jsx 頂部。" 
+                            : firebaseError)
+                        : "正在準備雲端服務時發生錯誤..."}
+                </p>
             </div>
         );
     } else if (view === 'add' || view === 'edit') {
@@ -659,7 +720,6 @@ const App = () => {
                                 onEdit={handleEdit}
                                 userId={userId}
                                 db={db}
-                                appId={appId}
                                 isLoading={isLoading}
                             />
                         ))}
@@ -670,106 +730,105 @@ const App = () => {
     }
 
     return (
-        // FIX: Wrap in React.Fragment to place script tag *outside* the main div
-        <>
-            {/* FIX: Load Tailwind script outside the main div to ensure it loads first */}
-            <script src="https://cdn.tailwindcss.com"></script>
+        // FIX: Remove script tag (should be in index.html) and React.Fragment
+        <div className="min-h-screen bg-gradient-to-br from-teal-50 via-cyan-50 to-emerald-50 font-sans">
+            <style>{`
+                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+                body { 
+                    font-family: 'Inter', sans-serif; 
+                    overflow-x: hidden;
+                }
+                
+                /* Smooth scrolling */
+                * {
+                    scroll-behavior: smooth;
+                }
+                
+                /* Custom scrollbar */
+                ::-webkit-scrollbar {
+                    width: 8px;
+                }
+                ::-webkit-scrollbar-track {
+                    background: #f1f1f1;
+                }
+                ::-webkit-scrollbar-thumb {
+                    background: linear-gradient(to bottom, #14b8a6, #10b981);
+                    border-radius: 10px;
+                }
+                ::-webkit-scrollbar-thumb:hover {
+                    background: linear-gradient(to bottom, #0d9488, #059669);
+                }
+                
+                /* Ensure large enough touch targets */
+                button { 
+                    min-height: 44px;
+                    min-width: 44px;
+                }
+                
+                /* Backdrop blur support */
+                @supports (backdrop-filter: blur(10px)) {
+                    .backdrop-blur-xl {
+                        backdrop-filter: blur(24px);
+                    }
+                    .backdrop-blur-sm {
+                        backdrop-filter: blur(8px);
+                    }
+                }
+            `}</style>
+            
+            {/* FIX: Removed the <meta name="viewport"...> tag from here. 
+              It MUST be placed in your public/index.html file's <head> section
+              for the PWA to load with the correct scale.
+            */}
 
-            <div className="min-h-screen bg-gradient-to-br from-teal-50 via-cyan-50 to-emerald-50 font-sans">
-                <style>{`
-                    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
-                    body { 
-                        font-family: 'Inter', sans-serif; 
-                        overflow-x: hidden;
-                    }
-                    
-                    /* Smooth scrolling */
-                    * {
-                        scroll-behavior: smooth;
-                    }
-                    
-                    /* Custom scrollbar */
-                    ::-webkit-scrollbar {
-                        width: 8px;
-                    }
-                    ::-webkit-scrollbar-track {
-                        background: #f1f1f1;
-                    }
-                    ::-webkit-scrollbar-thumb {
-                        background: linear-gradient(to bottom, #14b8a6, #10b981);
-                        border-radius: 10px;
-                    }
-                    ::-webkit-scrollbar-thumb:hover {
-                        background: linear-gradient(to bottom, #0d9488, #059669);
-                    }
-                    
-                    /* Ensure large enough touch targets */
-                    button { 
-                        min-height: 44px;
-                        min-width: 44px;
-                    }
-                    
-                    /* Backdrop blur support */
-                    @supports (backdrop-filter: blur(10px)) {
-                        .backdrop-blur-xl {
-                            backdrop-filter: blur(24px);
-                        }
-                        .backdrop-blur-sm {
-                            backdrop-filter: blur(8px);
-                        }
-                    }
-                `}</style>
-                <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-
-                {/* Header with Glassmorphism */}
-                <header className="sticky top-0 bg-white/70 backdrop-blur-xl shadow-lg z-50 border-b border-white/20">
-                    <div className="p-5">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <h1 className="text-2xl font-extrabold bg-gradient-to-r from-teal-600 via-emerald-600 to-cyan-600 bg-clip-text text-transparent tracking-tight">
-                                    ✨ 保養品管理
-                                </h1>
-                                <p className="text-xs text-gray-500 mt-1">智能追蹤 • 效期提醒</p>
-                            </div>
-                            <div className="w-12 h-12 bg-gradient-to-br from-teal-400 to-emerald-500 rounded-2xl flex items-center justify-center shadow-lg">
-                                <Package className="w-6 h-6 text-white" />
-                            </div>
+            {/* Header with Glassmorphism */}
+            <header className="sticky top-0 bg-white/70 backdrop-blur-xl shadow-lg z-50 border-b border-white/20">
+                <div className="p-5">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h1 className="text-2xl font-extrabold bg-gradient-to-r from-teal-600 via-emerald-600 to-cyan-600 bg-clip-text text-transparent tracking-tight">
+                                ✨ 保養品管理
+                            </h1>
+                            <p className="text-xs text-gray-500 mt-1">智能追蹤 • 效期提醒</p>
+                        </div>
+                        <div className="w-12 h-12 bg-gradient-to-br from-teal-400 to-emerald-500 rounded-2xl flex items-center justify-center shadow-lg">
+                            <Package className="w-6 h-6 text-white" />
                         </div>
                     </div>
-                </header>
+                </div>
+            </header>
 
-                {/* Main Content Area */}
-                <main className="pb-28 pt-2 px-0">
-                    {content}
-                </main>
+            {/* Main Content Area */}
+            <main className="pb-28 pt-2 px-0">
+                {content}
+            </main>
 
-                {/* Floating Action Button (FAB) with Enhanced Design */}
-                {view === 'list' && (
-                    <button
-                        onClick={() => {
-                            setEditProduct(null);
-                            setView('add');
-                        }}
-                        className="fixed bottom-6 right-6 group"
-                        aria-label="新增產品"
-                    >
-                        {/* Pulsing Background */}
-                        <div className="absolute inset-0 bg-gradient-to-r from-teal-400 to-emerald-500 rounded-full animate-ping opacity-75"></div>
-                        
-                        {/* Main Button */}
-                        <div className="relative w-16 h-16 bg-gradient-to-br from-teal-500 via-emerald-500 to-cyan-600 rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-active:scale-95 group-hover:shadow-3xl">
-                            <Plus className="w-8 h-8 text-white transition-transform duration-300 group-hover:rotate-90" />
-                        </div>
-                        
-                        {/* Tooltip (Removed absolute positioning to prevent rendering text when CSS fails) */}
-                        <div className="hidden absolute bottom-full right-0 mb-3 px-3 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap pointer-events-none">
-                            新增保養品
-                            <div className="absolute top-full right-6 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
-                        </div>
-                    </button>
-                )}
-            </div>
-        </> // FIX: Close React.Fragment
+            {/* Floating Action Button (FAB) with Enhanced Design */}
+            {view === 'list' && (
+                <button
+                    onClick={() => {
+                        setEditProduct(null);
+                        setView('add');
+                    }}
+                    className="fixed bottom-6 right-6 group"
+                    aria-label="新增產品"
+                >
+                    {/* Pulsing Background */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-teal-400 to-emerald-500 rounded-full animate-ping opacity-75"></div>
+                    
+                    {/* Main Button */}
+                    <div className="relative w-16 h-16 bg-gradient-to-br from-teal-500 via-emerald-500 to-cyan-600 rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-active:scale-95 group-hover:shadow-3xl">
+                        <Plus className="w-8 h-8 text-white transition-transform duration-300 group-hover:rotate-90" />
+                    </div>
+                    
+                    {/* Tooltip */}
+                    <div className="hidden absolute bottom-full right-0 mb-3 px-3 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowGrap pointer-events-none">
+                        新增保養品
+                        <div className="absolute top-full right-6 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                    </div>
+                </button>
+            )}
+        </div>
     );
 };
 
