@@ -4,28 +4,9 @@ import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged }
 import { getFirestore, collection, onSnapshot, query, addDoc, doc, deleteDoc, updateDoc, where, getDocs } from 'firebase/firestore';
 import { Loader, Camera, Plus, List, X, Trash2, Edit, CheckCircle, Clock, Package, Calendar } from 'lucide-react';
 
-// --- START: Configuration for Local/Vercel Deployment ---
-// 1. 請到 https://firebase.google.com/ 建立您自己的 Firebase 專案
-// 2. 將您專案的 "firebaseConfig" 物件貼到這裡。
-const firebaseConfig = {
-  apiKey: "PASTE_YOUR_API_KEY_HERE",
-  authDomain: "PASTE_YOUR_AUTH_DOMAIN_HERE",
-  projectId: "PASTE_YOUR_PROJECT_ID_HERE", // 這是必填項！
-  storageBucket: "PASTE_YOUR_STORAGE_BUCKET_HERE",
-  messagingSenderId: "PASTE_YOUR_MESSAGING_SENDER_ID_HERE",
-  appId: "PASTE_YOUR_APP_ID_HERE"
-};
-
-// 3. 這個 App 需要 Firestore。請在您的 Firebase 專案中啟用 Firestore。
-// 4. (重要) 設定 Firestore 安全規則 (用於測試)：
-// rules_version = '2';
-// service cloud.firestore {
-//   match /databases/{database}/documents {
-//     match /{document=**} {
-//       allow read, write: if true; // 警告：這僅供測試，不安全。
-//     }
-//   }
-// }
+// --- Configuration (還原為依賴環境變數的版本) ---
+// 這裡不再需要手動貼入 Firebase Config。
+// 應用程式將自動尋找 Canvas/Vercel 環境變數。
 
 // 5. 這是您的資料儲存路徑，您可以自訂。
 const APP_DATA_PATH = "skincare-app-data"; 
@@ -33,13 +14,9 @@ const APP_DATA_PATH = "skincare-app-data";
 
 
 // --- Canvas Environment Fallbacks (for compatibility) ---
-const canvasFirebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+// 程式碼將依賴這些全域變數
+const finalFirebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
 const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-// 優先使用您貼上的 local config，如果沒有，才嘗試使用 Canvas 的 config
-const finalFirebaseConfig = (firebaseConfig.projectId && firebaseConfig.projectId !== "PASTE_YOUR_PROJECT_ID_HERE")
-  ? firebaseConfig 
-  : canvasFirebaseConfig;
 
 // API Key (Gemini)
 const API_KEY = ""; // 填入您的 Gemini API Key
@@ -128,8 +105,12 @@ const useFirebase = () => {
 
     useEffect(() => {
         try {
-            if (!finalFirebaseConfig || !finalFirebaseConfig.projectId || finalFirebaseConfig.projectId === "PASTE_YOUR_PROJECT_ID_HERE") {
-                throw new Error("Firebase config is missing. Please paste your Firebase project's config object at the top of src/App.jsx");
+            // FIX: Removed unnecessary local config check. 
+            // Rely only on finalFirebaseConfig which is from the environment.
+            if (!finalFirebaseConfig || !finalFirebaseConfig.projectId) {
+                // If config is missing (only happens in local dev environment), throw an error.
+                // In Canvas/Vercel, the config will be provided.
+                throw new Error("Firebase config is missing or incomplete.");
             }
             const app = initializeApp(finalFirebaseConfig);
             const firestore = getFirestore(app);
@@ -285,9 +266,8 @@ const AddProductForm = ({ userId, db, onSave, onCancel, isLoading, setIsLoading,
         };
 
         try {
-            // FIX: Use APP_DATA_PATH for local/Vercel deployment
-            // Path should be collection/document/collection (3 segments)
-            // 'skincare-app-data' (collection) / {userId} (document) / 'products' (collection)
+            // FIX: Path corrected to 3 segments (Collection/Document/Collection)
+            // Invalid path was: `${APP_DATA_PATH}/users/${userId}/products` (4 segments)
             const dataPath = `${APP_DATA_PATH}/${userId}/products`;
             
             if (isEditing) {
@@ -514,8 +494,7 @@ const ProductCard = ({ product, onDelete, onEdit, userId, db, isLoading }) => {
         // FIX: Use window.confirm for local dev, as custom modals are complex
         if (window.confirm(`確定要刪除產品 "${product.name}" 嗎？`)) {
             try {
-                // FIX: Use APP_DATA_PATH
-                // Path should be collection/document/collection (3 segments)
+                // FIX: Path corrected to 3 segments (Collection/Document/Collection)
                 const dataPath = `${APP_DATA_PATH}/${userId}/products`;
                 await deleteDoc(doc(db, dataPath, product.id));
             } catch (error) {
@@ -615,8 +594,7 @@ const App = () => {
         if (!isAuthReady || !db || !userId || firebaseError) return;
 
         setIsLoading(true);
-        // FIX: Use APP_DATA_PATH
-        // Path should be collection/document/collection (3 segments)
+        // FIX: Path corrected to 3 segments (Collection/Document/Collection)
         const productsColRef = collection(db, `${APP_DATA_PATH}/${userId}/products`);
         const q = query(productsColRef);
 
@@ -667,7 +645,7 @@ const App = () => {
                 <p className="mt-2 text-gray-600 text-sm text-center">
                     {firebaseError 
                         ? (firebaseError.includes("config is missing") 
-                            ? "錯誤：找不到 Firebase 設定。請檢查您是否已將設定檔貼入 src/App.jsx 頂部。" 
+                            ? "錯誤：找不到 Firebase 設定。請檢查您是否已在 Vercel 環境變數中設定相關參數。" 
                             : firebaseError)
                         : "正在準備雲端服務時發生錯誤..."}
                 </p>
@@ -776,10 +754,10 @@ const App = () => {
                 }
             `}</style>
             
-            {/* FIX: Removed the <meta name="viewport"...> tag from here. 
-              It MUST be placed in your public/index.html file's <head> section
-              for the PWA to load with the correct scale.
+            {/* FIX: This meta tag should be in your public/index.html file, 
+              but we keep it here as a fallback for the single-file setup.
             */}
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 
             {/* Header with Glassmorphism */}
             <header className="sticky top-0 bg-white/70 backdrop-blur-xl shadow-lg z-50 border-b border-white/20">
@@ -833,4 +811,3 @@ const App = () => {
 };
 
 export default App;
-
