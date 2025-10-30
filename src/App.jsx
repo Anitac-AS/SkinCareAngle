@@ -1,25 +1,44 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, query, addDoc, doc, deleteDoc, updateDoc, where, getDocs } from 'firebase/firestore';
+import { getFirestore, collection, onSnapshot, query, addDoc, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { Loader, Camera, Plus, List, X, Trash2, Edit, CheckCircle, Clock, Package, Calendar } from 'lucide-react';
 
-// --- Configuration (還原為依賴環境變數的版本) ---
-// 這裡不再需要手動貼入 Firebase Config。
-// 應用程式將自動尋找 Canvas/Vercel 環境變數。
-
-// 5. 這是您的資料儲存路徑，您可以自訂。
+// --- Configuration ---
 const APP_DATA_PATH = "skincare-app-data"; 
-// --- END: Configuration ---
 
+// --- Environment Variable Handling ---
+// FIX: 將 import.meta.env 替換為 process.env，以解決編譯器目標環境不支援的問題。
+const getFirebaseConfig = () => {
+    // 1. 嘗試讀取 Vercel/Vite 提供的標準環境變數 (必須以 VITE_ 開頭)
+    const VERCEL_CONFIG = {
+        apiKey: process.env.VITE_FIREBASE_API_KEY,
+        authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN,
+        projectId: process.env.VITE_FIREBASE_PROJECT_ID,
+        storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET,
+        messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+        appId: process.env.VITE_FIREBASE_APP_ID,
+    };
 
-// --- Canvas Environment Fallbacks (for compatibility) ---
-// 程式碼將依賴這些全域變數
-const finalFirebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+    // 檢查 Vercel Config 是否完整 (使用 projectId 作為檢查點)
+    if (VERCEL_CONFIG.projectId && VERCEL_CONFIG.projectId !== "undefined") {
+        console.log("Using Vercel VITE_ Environment Config.");
+        return VERCEL_CONFIG;
+    }
+
+    // 2. 嘗試讀取 Canvas 提供的全域變數 (用於 Canvas 環境)
+    if (typeof __firebase_config !== 'undefined') {
+        console.log("Using Canvas Global Config.");
+        return JSON.parse(__firebase_config);
+    }
+    
+    // 3. 如果兩者皆無
+    return null;
+};
 
 // API Key (Gemini)
-const API_KEY = ""; // 填入您的 Gemini API Key
+// 確保您在 Vercel 也設定了 VITE_GEMINI_API_KEY (如果您的 App 要使用 AI 辨識功能)
+const API_KEY = ""; 
 
 // --- Utility Functions ---
 
@@ -103,14 +122,15 @@ const useFirebase = () => {
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [firebaseError, setFirebaseError] = useState(null);
 
+    // 讀取 Canvas 的初始 Auth Token
+    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+    const finalFirebaseConfig = getFirebaseConfig();
+
     useEffect(() => {
         try {
-            // FIX: Removed unnecessary local config check. 
-            // Rely only on finalFirebaseConfig which is from the environment.
             if (!finalFirebaseConfig || !finalFirebaseConfig.projectId) {
-                // If config is missing (only happens in local dev environment), throw an error.
-                // In Canvas/Vercel, the config will be provided.
-                throw new Error("Firebase config is missing or incomplete.");
+                // FIX: 錯誤訊息已更新，提醒用戶使用 VITE_ 前綴
+                throw new Error("config is missing. Please set Firebase environment variables with VITE_ prefix in Vercel.");
             }
             const app = initializeApp(finalFirebaseConfig);
             const firestore = getFirestore(app);
@@ -127,7 +147,7 @@ const useFirebase = () => {
                     await signInWithCustomToken(authInstance, initialAuthToken);
                     setUserId(authInstance.currentUser?.uid);
                 } else {
-                    // Fallback for local dev
+                    // Fallback for Vercel/local dev
                     await signInAnonymously(authInstance);
                     setUserId(authInstance.currentUser?.uid);
                 }
@@ -137,10 +157,11 @@ const useFirebase = () => {
             return () => unsubscribe();
         } catch (error) {
             console.error("Firebase Initialization Error:", error);
-            setFirebaseError(error.message);
-            setIsAuthReady(true); // Stop loading
+            // 確保錯誤訊息能顯示給用戶看
+            setFirebaseError(error.message); 
+            setIsAuthReady(true); 
         }
-    }, []);
+    }, [initialAuthToken]); 
 
     return { db, auth, userId, isAuthReady, firebaseError };
 };
@@ -266,8 +287,7 @@ const AddProductForm = ({ userId, db, onSave, onCancel, isLoading, setIsLoading,
         };
 
         try {
-            // FIX: Path corrected to 3 segments (Collection/Document/Collection)
-            // Invalid path was: `${APP_DATA_PATH}/users/${userId}/products` (4 segments)
+            // Path corrected to 3 segments (Collection/Document/Collection)
             const dataPath = `${APP_DATA_PATH}/${userId}/products`;
             
             if (isEditing) {
@@ -328,7 +348,7 @@ const AddProductForm = ({ userId, db, onSave, onCancel, isLoading, setIsLoading,
                                         alt="產品照片預覽" 
                                         className="object-contain w-full h-full"
                                     />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                                    <div className={`absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300`}></div>
                                 </div>
                                 
                                 {!isEditing && (
@@ -437,7 +457,7 @@ const AddProductForm = ({ userId, db, onSave, onCancel, isLoading, setIsLoading,
                             className="flex-1 px-6 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-2xl transition-all duration-300 shadow-md hover:shadow-lg active:scale-95"
                             disabled={isLoading}
                         >
-                            <X className="w-5 h-5 inline-block mr-1" /> 取消
+                            X 取消
                         </button>
                         <button
                             type="submit"
@@ -491,10 +511,10 @@ const ProductCard = ({ product, onDelete, onEdit, userId, db, isLoading }) => {
     const { gradient, statusText, badgeStyle } = getProductStatus(product.expiryDate, product.openedDate);
 
     const handleDelete = async () => {
-        // FIX: Use window.confirm for local dev, as custom modals are complex
+        // Use window.confirm for simplicity
         if (window.confirm(`確定要刪除產品 "${product.name}" 嗎？`)) {
             try {
-                // FIX: Path corrected to 3 segments (Collection/Document/Collection)
+                // Path corrected to 3 segments (Collection/Document/Collection)
                 const dataPath = `${APP_DATA_PATH}/${userId}/products`;
                 await deleteDoc(doc(db, dataPath, product.id));
             } catch (error) {
@@ -594,7 +614,7 @@ const App = () => {
         if (!isAuthReady || !db || !userId || firebaseError) return;
 
         setIsLoading(true);
-        // FIX: Path corrected to 3 segments (Collection/Document/Collection)
+        // Path corrected to 3 segments (Collection/Document/Collection)
         const productsColRef = collection(db, `${APP_DATA_PATH}/${userId}/products`);
         const q = query(productsColRef);
 
@@ -645,7 +665,7 @@ const App = () => {
                 <p className="mt-2 text-gray-600 text-sm text-center">
                     {firebaseError 
                         ? (firebaseError.includes("config is missing") 
-                            ? "錯誤：找不到 Firebase 設定。請檢查您是否已在 Vercel 環境變數中設定相關參數。" 
+                            ? "錯誤：找不到 Firebase 設定。請檢查您是否已在 Vercel 環境變數中設定 VITE_ 開頭的參數。" 
                             : firebaseError)
                         : "正在準備雲端服務時發生錯誤..."}
                 </p>
