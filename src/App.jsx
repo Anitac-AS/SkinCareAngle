@@ -741,49 +741,47 @@ const App = () => {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-teal-50 via-cyan-50 to-emerald-50 font-sans">
-            <style>{`
-                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
-                body { 
-                    font-family: 'Inter', sans-serif; 
-                    overflow-x: hidden;
-                }
-                
-                /* Smooth scrolling */
-                * {
-                    scroll-behavior: smooth;
-                }
-                
-                /* Custom scrollbar */
-                ::-webkit-scrollbar {
-                    width: 8px;
-                }
-                ::-webkit-scrollbar-track {
-                    background: #f1f1f1;
-                }
-                ::-webkit-scrollbar-thumb {
-                    background: linear-gradient(to bottom, #14b8a6, #10b981);
-                    border-radius: 10px;
-                }
-                ::-webkit-scrollbar-thumb:hover {
-                    background: linear-gradient(to bottom, #0d9488, #059669);
-                }
-                
-                /* Ensure large enough touch targets */
-                button { 
-                    min-height: 44px;
-                    min-width: 44px;
-                }
-                
-                /* Backdrop blur support */
-                @supports (backdrop-filter: blur(10px)) {
-                    .backdrop-blur-xl {
-                        backdrop-filter: blur(24px);
-                    }
-                    .backdrop-blur-sm {
-                        backdrop-filter: blur(8px);
-                    }
-                }
-            `}</style>
+<style>{`
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+  
+  body { 
+    font-family: 'Inter', sans-serif; 
+    overflow-x: hidden;
+  }
+  
+  /* 平滑滾動 */
+  * {
+    scroll-behavior: smooth;
+    box-sizing: border-box;
+  }
+  
+  /* Android Chrome 自定義滾動條 */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #f1f1f1;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(to bottom, #14b8a6, #10b981);
+    border-radius: 10px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(to bottom, #0d9488, #059669);
+  }
+  
+  /* 確保觸控目標足夠大 */
+  button { 
+    min-height: 48px;
+    min-width: 48px;
+  }
+  
+  /* 圖片不溢出 */
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+`}</style>
 
             {/* Header with Glassmorphism */}
             <header className="sticky top-0 bg-white/70 backdrop-blur-xl shadow-lg z-50 border-b border-white/20">

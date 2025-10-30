@@ -3,23 +3,48 @@
 <head>
   <meta charset="UTF-8" />
   <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-
-  <!-- ↓↓↓ 這是修復顯示比例的關鍵 ↓↓↓ -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-
-  <!-- ↓↓↓ 這是 PWA 的設定檔案 ↓↓↓ -->
+  
+  <!-- ✅ Android 顯示比例設定 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  
+  <!-- ✅ Android PWA 主題顏色 -->
+  <meta name="theme-color" content="#14b8a6" />
+  
+    <!-- Android PWA 全屏模式 -->
+  <meta name="mobile-web-app-capable" content="yes" />
+  
+  <!-- ✅ PWA manifest -->
   <link rel="manifest" href="/manifest.json" />
-
-  <!-- ↓↓↓ 這是 Apple 裝置的 PWA 設定 ↓↓↓ -->
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="apple-mobile-web-app-title" content="保養品" />
-
+  
   <script src="https://cdn.tailwindcss.com"></script>
   <title>保養品管理</title>
+  
+  <!-- ✅ Android 專用樣式修復 -->
+  <style>
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+      position: fixed;
+    }
+    
+    #root {
+      width: 100%;
+      height: 100%;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+    
+    /* 防止雙擊縮放 */
+    * {
+      touch-action: manipulation;
+    }
+  </style>
 </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
 </html>
