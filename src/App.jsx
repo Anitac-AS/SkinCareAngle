@@ -8,28 +8,23 @@ import { Loader, Camera, Plus, List, X, Trash2, Edit, CheckCircle, Clock, Packag
 // Vercel/Vite 會自動從 "import.meta.env" 讀取 VITE_ 開頭的環境變數
 // 您必須在 Vercel 專案的 Settings > Environment Variables 中設定這些值
 
-// FIX: Safely access import.meta.env to avoid build warnings in environments that don't support it.
-const env = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : {};
-
+// FIX: Use Vite's standard import.meta.env directly.
+// This is correct for your localhost (Vite) and Vercel (Vite) environments.
 const firebaseConfig = {
-  apiKey: env.VITE_API_KEY,
-  authDomain: env.VITE_AUTH_DOMAIN,
-  projectId: env.VITE_PROJECT_ID,
-  storageBucket: env.VITE_STORAGE_BUCKET,
-  messagingSenderId: env.VITE_MESSAGING_SENDER_ID,
-  appId: env.VITE_APP_ID
+  apiKey: import.meta.env.VITE_API_KEY,
+  authDomain: import.meta.env.VITE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_APP_ID
 };
 
 // 檢查本地設定是否完整 (用於 Vercel 部署)
 const isLocalConfigValid = firebaseConfig.projectId && firebaseConfig.apiKey;
 
-// --- Canvas Environment Fallbacks (for compatibility) ---
-// 僅當 Vercel 環境變數不存在時，才嘗試使用 Canvas 的全域變數
-const canvasFirebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-// 優先使用 Vercel/Vite 的環境變數，如果沒有，才嘗試使用 Canvas 的 config
-const finalFirebaseConfig = isLocalConfigValid ? firebaseConfig : canvasFirebaseConfig;
+// --- Canvas Environment Fallbacks (REMOVED for clarity) ---
+// We are now fully on Vercel/localhost, so Canvas fallbacks are removed.
+const finalFirebaseConfig = firebaseConfig;
 
 // API Key (Gemini) - 建議也設為環境變數
 const API_KEY = ""; // 填入您的 Gemini API Key
@@ -137,11 +132,6 @@ const useFirebase = () => {
             const unsubscribe = onAuthStateChanged(authInstance, async (user) => {
                 if (user) {
                     setUserId(user.uid);
-                } else if (initialAuthToken) {
-                    // This block is for Canvas environment, which we are moving away from
-                    // For local dev, we rely on anonymous sign-in
-                    await signInAnonymously(authInstance);
-                    setUserId(authInstance.currentUser?.uid);
                 } else {
                     // Fallback for local dev and Vercel
                     await signInAnonymously(authInstance);
@@ -602,11 +592,25 @@ const App = () => {
     const { db, userId, isAuthReady, firebaseError } = useFirebase();
     const [view, setView] = useState('list');
     const [products, setProducts] = useState([]);
-    const [isLoading, setIsLoading] = useState(false);
-    const [editProduct, setEditProduct] = useState(null);
+    const [isLoading, setIsLoading] = useState(true); // Default to true on initial load
+    const [appError, setAppError] = useState(null); // Combine Firebase error and listener error
 
     useEffect(() => {
-        if (!isAuthReady || !db || !userId || firebaseError) return;
+        // Update appError if firebaseError changes
+        if (firebaseError) {
+            setAppError(firebaseError);
+            setIsLoading(false);
+        }
+    }, [firebaseError]);
+
+    useEffect(() => {
+        if (!isAuthReady || !db || !userId || appError) {
+            if (isAuthReady && !appError) {
+                // We are ready but missing db or userId (shouldn't happen)
+                setIsLoading(false);
+            }
+            return; // Don't fetch if not ready or already in error state
+        }
 
         setIsLoading(true);
         // FIX: Path should be collection/document/collection (3 segments)
@@ -626,13 +630,17 @@ const App = () => {
 
             setProducts(productsList);
             setIsLoading(false);
+            setAppError(null); // Clear previous errors on success
         }, (error) => {
+            // FIX: THIS IS THE CRITICAL FIX
+            // Set the error state so the UI can display it
             console.error("Firestore Listener Error:", error);
+            setAppError(`Firestore 讀取錯誤: ${error.message}. (請檢查您的 Firestore 安全規則是否允許匿名讀取)`);
             setIsLoading(false);
         });
 
         return () => unsubscribe();
-    }, [isAuthReady, db, userId, firebaseError]);
+    }, [isAuthReady, db, userId, appError]); // Rerun if auth state changes or error is cleared
 
     const handleSave = useCallback(() => {
         setView('list');
@@ -644,25 +652,17 @@ const App = () => {
         setView('edit');
     }, []);
 
+    // --- FIX: Simplified Render Logic ---
     let content;
-    if (!isAuthReady || (isLoading && products.length === 0 && !firebaseError)) {
+    if (!isAuthReady) {
         content = (
             <div className="flex flex-col items-center justify-center h-[70vh] p-4">
                 <Loader className="w-12 h-12 animate-spin text-teal-500 mb-6" />
-                <p className="text-gray-600 font-semibold text-lg text-center">
-                    {firebaseError ? "Firebase 載入失敗" : "正在載入產品資料..."}
-                </p>
-                <p className="mt-2 text-gray-500 text-sm text-center">
-                    {firebaseError 
-                        ? (firebaseError.includes("config is missing") 
-                            ? "錯誤：找不到 Firebase 設定。請檢查 Vercel 上的環境變數是否已設定。" 
-                            : firebaseError)
-                        : "正在準備雲端服務..."}
-                </p>
+                <p className="text-gray-600 font-semibold text-lg text-center">正在連線至雲端服務...</p>
             </div>
         );
-    } else if (firebaseError) {
-         content = (
+    } else if (appError) {
+        content = (
             <div className="flex flex-col items-center justify-center h-[70vh] p-4">
                 <div className="relative mb-6">
                     <div className="w-16 h-16 border-4 border-red-200 rounded-full"></div>
@@ -671,13 +671,20 @@ const App = () => {
                     </div>
                 </div>
                 <p className="mt-6 text-red-700 font-semibold text-lg text-center">
-                    Firebase 載入失敗
+                    載入失敗
                 </p>
                 <p className="mt-2 text-gray-600 text-sm text-center">
-                    {firebaseError.includes("config is missing") 
+                    {appError.includes("config is missing") 
                         ? "錯誤：找不到 Firebase 設定。請檢查 Vercel 上的環境變數 (VITE_...) 是否已正確設定並重新部署。" 
-                        : firebaseError}
-                </p>{/* FIX: Changed </input> to </p> */}
+                        : appError}
+                </p>
+            </div>
+        );
+    } else if (isLoading) {
+         content = (
+            <div className="flex flex-col items-center justify-center h-[70vh] p-4">
+                <Loader className="w-12 h-12 animate-spin text-teal-500 mb-6" />
+                <p className="text-gray-600 font-semibold text-lg text-center">正在載入產品資料...</p>
             </div>
         );
     } else if (view === 'add' || view === 'edit') {
@@ -693,8 +700,9 @@ const App = () => {
             />
         );
     } else {
+        // This block now handles both empty list and list with products
         content = (
-            <div className="p-5 space-y-4">
+             <div className="p-5 space-y-4">
                 <div className="flex justify-between items-center mb-6">
                     <div>
                         <h2 className="text-2xl font-bold bg-gradient-to-r from-teal-600 to-emerald-600 bg-clip-text text-transparent">
@@ -800,7 +808,7 @@ const App = () => {
             </main>
 
             {/* Floating Action Button (FAB) with Enhanced Design */}
-            {view === 'list' && !firebaseError && (
+            {view === 'list' && !appError && (
                 <button
                     onClick={() => {
                         setEditProduct(null);
@@ -829,6 +837,5 @@ const App = () => {
 };
 
 export default App;
-
 
 
