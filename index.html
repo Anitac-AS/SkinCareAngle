@@ -1,12 +1,23 @@
 <!doctype html>
 <html lang="zh-Hant-TW">
-  <head>
-     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <script src="https://cdn.tailwindcss.com"></script>
-    <title>skincare-app</title>
-  </head>
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+
+  <!-- ↓↓↓ 這是修復顯示比例的關鍵 ↓↓↓ -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+  <!-- ↓↓↓ 這是 PWA 的設定檔案 ↓↓↓ -->
+  <link rel="manifest" href="/manifest.json" />
+
+  <!-- ↓↓↓ 這是 Apple 裝置的 PWA 設定 ↓↓↓ -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="保養品" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <title>保養品管理</title>
+</head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>

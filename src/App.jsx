@@ -1,42 +1,39 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, query, addDoc, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { Loader, Camera, Plus, List, X, Trash2, Edit, CheckCircle, Clock, Package, Calendar } from 'lucide-react';
 
-// --- Configuration ---
-const APP_DATA_PATH = "skincare-app-data"; 
-
-// --- Environment Variable Handling ---
-// FINAL FIX: 直接硬編碼 Firebase 設置，繞過 Vercel/Vite 的環境變數問題。
-const getFirebaseConfig = () => {
-    // 1. 這是您提供的 Firebase 專案設定
-    const HARDCODED_CONFIG = {
-        apiKey: "AIzaSyBKVFMND1Z0Ugw4JH_usguMcYu7Qyq1pOM",
-        authDomain: "skincaremanager-anita.firebaseapp.com",
-        projectId: "skincaremanager-anita",
-        storageBucket: "skincaremanager-anita.firebasestorage.app",
-        messagingSenderId: "660374271753",
-        appId: "1:660374271753:web:eb56765f628ab8e95e85d8",
-    };
-
-    if (HARDCODED_CONFIG.projectId) {
-        console.log("Using HARDCODED Firebase Config.");
-        return HARDCODED_CONFIG;
-    }
-    
-    // 2. 嘗試讀取 Canvas 提供的全域變數 (作為備用)
-    if (typeof __firebase_config !== 'undefined') {
-        console.log("Using Canvas Global Config.");
-        return JSON.parse(__firebase_config);
-    }
-    
-    return null;
+// --- START: Configuration for Vercel/Local Deployment ---
+// Vercel/Vite 會自動從 "import.meta.env" 讀取 VITE_ 開頭的環境變數
+// 您必須在 Vercel 專案的 Settings > Environment Variables 中設定這些值
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_API_KEY,
+  authDomain: import.meta.env.VITE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_APP_ID
 };
 
-// API Key (Gemini)
-// 由於 Gemini API Key 未在 Vercel 環境變數中設置，因此暫時保留為空
-const API_KEY = ""; 
+// 檢查本地設定是否完整 (用於 Vercel 部署)
+const isLocalConfigValid = firebaseConfig.projectId && firebaseConfig.apiKey;
+
+// --- Canvas Environment Fallbacks (for compatibility) ---
+// 僅當 Vercel 環境變數不存在時，才嘗試使用 Canvas 的全域變數
+const canvasFirebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+// 優先使用 Vercel/Vite 的環境變數，如果沒有，才嘗試使用 Canvas 的 config
+const finalFirebaseConfig = isLocalConfigValid ? firebaseConfig : canvasFirebaseConfig;
+
+// API Key (Gemini) - 建議也設為環境變數
+const API_KEY = ""; // 填入您的 Gemini API Key
+
+// 這是您的資料儲存路徑
+const APP_DATA_PATH = "skincare-app-data"; 
+// --- END: Configuration ---
+
 
 // --- Utility Functions ---
 
@@ -120,15 +117,11 @@ const useFirebase = () => {
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [firebaseError, setFirebaseError] = useState(null);
 
-    // 讀取 Canvas 的初始 Auth Token
-    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-    const finalFirebaseConfig = getFirebaseConfig();
-
     useEffect(() => {
         try {
             if (!finalFirebaseConfig || !finalFirebaseConfig.projectId) {
-                // 由於硬編碼已失敗，這將是最終的錯誤提示
-                throw new Error("config is missing. Please check your Firebase settings or environment variables.");
+                // This error will now clearly state if Vercel env vars are missing
+                throw new Error("Firebase config is missing or incomplete. If deploying on Vercel, ensure all VITE_... environment variables are set.");
             }
             const app = initializeApp(finalFirebaseConfig);
             const firestore = getFirestore(app);
@@ -141,11 +134,12 @@ const useFirebase = () => {
                 if (user) {
                     setUserId(user.uid);
                 } else if (initialAuthToken) {
-                    // This block is for Canvas environment
-                    await signInWithCustomToken(authInstance, initialAuthToken);
+                    // This block is for Canvas environment, which we are moving away from
+                    // For local dev, we rely on anonymous sign-in
+                    await signInAnonymously(authInstance);
                     setUserId(authInstance.currentUser?.uid);
                 } else {
-                    // Fallback for Vercel/local dev
+                    // Fallback for local dev and Vercel
                     await signInAnonymously(authInstance);
                     setUserId(authInstance.currentUser?.uid);
                 }
@@ -155,11 +149,10 @@ const useFirebase = () => {
             return () => unsubscribe();
         } catch (error) {
             console.error("Firebase Initialization Error:", error);
-            // 確保錯誤訊息能顯示給用戶看
-            setFirebaseError(error.message); 
-            setIsAuthReady(true); 
+            setFirebaseError(error.message);
+            setIsAuthReady(true); // Stop loading
         }
-    }, [initialAuthToken]); 
+    }, []);
 
     return { db, auth, userId, isAuthReady, firebaseError };
 };
@@ -285,7 +278,7 @@ const AddProductForm = ({ userId, db, onSave, onCancel, isLoading, setIsLoading,
         };
 
         try {
-            // Path corrected to 3 segments (Collection/Document/Collection)
+            // FIX: Path should be collection/document/collection (3 segments)
             const dataPath = `${APP_DATA_PATH}/${userId}/products`;
             
             if (isEditing) {
@@ -346,7 +339,7 @@ const AddProductForm = ({ userId, db, onSave, onCancel, isLoading, setIsLoading,
                                         alt="產品照片預覽" 
                                         className="object-contain w-full h-full"
                                     />
-                                    <div className={`absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300`}></div>
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                                 </div>
                                 
                                 {!isEditing && (
@@ -455,7 +448,7 @@ const AddProductForm = ({ userId, db, onSave, onCancel, isLoading, setIsLoading,
                             className="flex-1 px-6 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-2xl transition-all duration-300 shadow-md hover:shadow-lg active:scale-95"
                             disabled={isLoading}
                         >
-                            X 取消
+                            <X className="w-5 h-5 inline-block mr-1" /> 取消
                         </button>
                         <button
                             type="submit"
@@ -509,10 +502,10 @@ const ProductCard = ({ product, onDelete, onEdit, userId, db, isLoading }) => {
     const { gradient, statusText, badgeStyle } = getProductStatus(product.expiryDate, product.openedDate);
 
     const handleDelete = async () => {
-        // Use window.confirm for simplicity
+        // FIX: Use window.confirm for local dev, as custom modals are complex
         if (window.confirm(`確定要刪除產品 "${product.name}" 嗎？`)) {
             try {
-                // Path corrected to 3 segments (Collection/Document/Collection)
+                // FIX: Path should be collection/document/collection (3 segments)
                 const dataPath = `${APP_DATA_PATH}/${userId}/products`;
                 await deleteDoc(doc(db, dataPath, product.id));
             } catch (error) {
@@ -612,7 +605,7 @@ const App = () => {
         if (!isAuthReady || !db || !userId || firebaseError) return;
 
         setIsLoading(true);
-        // Path corrected to 3 segments (Collection/Document/Collection)
+        // FIX: Path should be collection/document/collection (3 segments)
         const productsColRef = collection(db, `${APP_DATA_PATH}/${userId}/products`);
         const q = query(productsColRef);
 
@@ -648,8 +641,24 @@ const App = () => {
     }, []);
 
     let content;
-    if (!isAuthReady || firebaseError) {
+    if (!isAuthReady || (isLoading && products.length === 0 && !firebaseError)) {
         content = (
+            <div className="flex flex-col items-center justify-center h-[70vh] p-4">
+                <Loader className="w-12 h-12 animate-spin text-teal-500 mb-6" />
+                <p className="text-gray-600 font-semibold text-lg text-center">
+                    {firebaseError ? "Firebase 載入失敗" : "正在載入產品資料..."}
+                </p>
+                <p className="mt-2 text-gray-500 text-sm text-center">
+                    {firebaseError 
+                        ? (firebaseError.includes("config is missing") 
+                            ? "錯誤：找不到 Firebase 設定。請檢查 Vercel 上的環境變數是否已設定。" 
+                            : firebaseError)
+                        : "正在準備雲端服務..."}
+                </p>
+            </div>
+        );
+    } else if (firebaseError) {
+         content = (
             <div className="flex flex-col items-center justify-center h-[70vh] p-4">
                 <div className="relative mb-6">
                     <div className="w-16 h-16 border-4 border-red-200 rounded-full"></div>
@@ -661,12 +670,10 @@ const App = () => {
                     Firebase 載入失敗
                 </p>
                 <p className="mt-2 text-gray-600 text-sm text-center">
-                    {firebaseError 
-                        ? (firebaseError.includes("config is missing") 
-                            ? "錯誤：找不到 Firebase 設定。請檢查您是否已將設定寫入程式碼（硬編碼）或 Vercel 環境變數。" 
-                            : firebaseError)
-                        : "正在準備雲端服務時發生錯誤..."}
-                </p>
+                    {firebaseError.includes("config is missing") 
+                        ? "錯誤：找不到 Firebase 設定。請檢查 Vercel 上的環境變數 (VITE_...) 是否已正確設定並重新部署。" 
+                        : firebaseError}
+                </input>
             </div>
         );
     } else if (view === 'add' || view === 'edit') {
@@ -693,12 +700,7 @@ const App = () => {
                     </div>
                 </div>
 
-                {isLoading && products.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-64">
-                        <Loader className="w-10 h-10 animate-spin text-teal-500 mb-4" />
-                        <p className="text-gray-500 font-medium">正在載入產品資料...</p>
-                    </div>
-                ) : products.length === 0 ? (
+                {products.length === 0 ? (
                     <div className="text-center py-20 bg-gradient-to-br from-teal-50 via-emerald-50 to-cyan-50 rounded-3xl border-2 border-dashed border-teal-200">
                         <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-teal-100 to-emerald-100 rounded-full flex items-center justify-center">
                             <Package className="w-10 h-10 text-teal-600" />
@@ -726,7 +728,6 @@ const App = () => {
     }
 
     return (
-        // FIX: Remove script tag (should be in index.html) and React.Fragment
         <div className="min-h-screen bg-gradient-to-br from-teal-50 via-cyan-50 to-emerald-50 font-sans">
             <style>{`
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
@@ -771,11 +772,6 @@ const App = () => {
                     }
                 }
             `}</style>
-            
-            {/* FIX: This meta tag should be in your public/index.html file, 
-              but we keep it here as a fallback for the single-file setup.
-            */}
-            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 
             {/* Header with Glassmorphism */}
             <header className="sticky top-0 bg-white/70 backdrop-blur-xl shadow-lg z-50 border-b border-white/20">
@@ -800,7 +796,7 @@ const App = () => {
             </main>
 
             {/* Floating Action Button (FAB) with Enhanced Design */}
-            {view === 'list' && (
+            {view === 'list' && !firebaseError && (
                 <button
                     onClick={() => {
                         setEditProduct(null);
@@ -818,7 +814,7 @@ const App = () => {
                     </div>
                     
                     {/* Tooltip */}
-                    <div className="hidden absolute bottom-full right-0 mb-3 px-3 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowGrap pointer-events-none">
+                    <div className="hidden absolute bottom-full right-0 mb-3 px-3 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap pointer-events-none">
                         新增保養品
                         <div className="absolute top-full right-6 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
                     </div>
@@ -829,3 +825,4 @@ const App = () => {
 };
 
 export default App;
+
