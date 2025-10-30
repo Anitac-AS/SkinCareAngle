@@ -1,19 +1,19 @@
-// 在您的本地專案根目錄下的 vite.config.js
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig, loadEnv } from 'vite';
+import react from '@vitejs/plugin-react';
 
-// 讀取 Vercel 的變數名稱 (這需要在打包時執行)
-const env = process.env;
+export default defineConfig(({ mode }) => {
+  // 載入 .env 檔案中 VITE_ 開頭的環境變數 (在 Vercel 中，會自動讀取 VERCEL_ENV)
+  const env = loadEnv(mode, process.cwd(), 'VITE_');
 
-export default defineConfig({
-  plugins: [react()],
-  // 增加 define 區塊，將環境變數明確傳遞給 App
-  define: {
-    'process.env.NEXT_PUBLIC_FIREBASE_API_KEY': JSON.stringify(env.NEXT_PUBLIC_FIREBASE_API_KEY),
-    'process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN': JSON.stringify(env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN),
-    'process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID': JSON.stringify(env.NEXT_PUBLIC_FIREBASE_PROJECT_ID),
-    'process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET': JSON.stringify(env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET),
-    'process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID': JSON.stringify(env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID),
-    'process.env.NEXT_PUBLIC_FIREBASE_APP_ID': JSON.stringify(env.NEXT_PUBLIC_FIREBASE_APP_ID),
+  // 將所有 VITE_ 開頭的變數，以字串形式定義到 process.env 中
+  const processEnv = {};
+  for (const key in env) {
+    processEnv[`process.env.${key}`] = JSON.stringify(env[key]);
   }
-})
+
+  return {
+    plugins: [react()],
+    // 這是最關鍵的一步：確保所有 VITE_ 變數在編譯時被硬編碼進程式碼
+    define: processEnv,
+  };
+});
