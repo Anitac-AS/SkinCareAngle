@@ -8,15 +8,16 @@ import { Loader, Camera, Plus, List, X, Trash2, Edit, CheckCircle, Clock, Packag
 // Vercel/Vite 會自動從 "import.meta.env" 讀取 VITE_ 開頭的環境變數
 // 您必須在 Vercel 專案的 Settings > Environment Variables 中設定這些值
 
-// FIX: Use Vite's standard import.meta.env directly.
-// This is correct for your localhost (Vite) and Vercel (Vite) environments.
+// FIX: Safely access import.meta.env to avoid build warnings in environments that don't support it.
+const env = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : {};
+
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_API_KEY,
-  authDomain: import.meta.env.VITE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_APP_ID
+  apiKey: env.VITE_API_KEY,
+  authDomain: env.VITE_AUTH_DOMAIN,
+  projectId: env.VITE_PROJECT_ID,
+  storageBucket: env.VITE_STORAGE_BUCKET,
+  messagingSenderId: env.VITE_MESSAGING_SENDER_ID,
+  appId: env.VITE_APP_ID
 };
 
 // 檢查本地設定是否完整 (用於 Vercel 部署)
@@ -26,8 +27,8 @@ const isLocalConfigValid = firebaseConfig.projectId && firebaseConfig.apiKey;
 // We are now fully on Vercel/localhost, so Canvas fallbacks are removed.
 const finalFirebaseConfig = firebaseConfig;
 
-// API Key (Gemini) - 建議也設為環境變數
-const API_KEY = ""; // 填入您的 Gemini API Key
+// FIX: Load Gemini API Key from Vercel Environment Variables
+const API_KEY = env.VITE_GEMINI_API_KEY;
 
 // 這是您的資料儲存路徑
 const APP_DATA_PATH = "skincare-app-data"; 
@@ -195,6 +196,12 @@ const AddProductForm = ({ userId, db, onSave, onCancel, initialData = null }) =>
             setStatusMessage('請先上傳圖片才能進行 AI 辨識。');
             return;
         }
+        
+        // FIX: Check for API Key
+        if (!API_KEY) {
+            setStatusMessage('❌ AI 辨識失敗: 未設定 Gemini API 金鑰。請在 Vercel 中設定 VITE_GEMINI_API_KEY。');
+            return;
+        }
 
         // FIX: Use internal form busy state
         setIsFormBusy(true);
@@ -202,7 +209,8 @@ const AddProductForm = ({ userId, db, onSave, onCancel, initialData = null }) =>
 
         try {
             const base64Data = await fileToBase64(formState.file);
-            const userPrompt = "Identify the brand name and the specific product name from this image of a skincare or cosmetic product. Please only return the JSON object.";
+            // FIX: Simplified prompt
+            const userPrompt = "Analyze this image of a skincare product and extract the brand and product name.";
             const apiUrl = `https.generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${API_KEY}`;
             
             const payload = {
@@ -232,7 +240,16 @@ const AddProductForm = ({ userId, db, onSave, onCancel, initialData = null }) =>
                 body: JSON.stringify(payload)
             });
 
-            if (!response.ok) throw new Error(`API error: ${response.statusText}`);
+            if (!response.ok) {
+                // Try to parse error response
+                let errorBody = await response.text();
+                try {
+                    errorBody = JSON.parse(errorBody).error.message;
+                } catch(e) {
+                    // ignore if not json
+                }
+                throw new Error(`API error: ${response.status} ${response.statusText}. ${errorBody}`);
+            }
 
             const result = await response.json();
             const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -261,7 +278,7 @@ const AddProductForm = ({ userId, db, onSave, onCancel, initialData = null }) =>
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!formState.name || !formState.brand) {
-            setStatusMessage('請至少填寫品牌和產品名稱。');
+            setStatusMessage('請至少填寫品牌和產品名称。');
             return;
         }
 
