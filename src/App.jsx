@@ -198,7 +198,7 @@ const AddProductForm = ({ userId, db, onSave, onCancel, isLoading, setIsLoading,
         try {
             const base64Data = await fileToBase64(formState.file);
             const userPrompt = "Identify the brand name and the specific product name from this image of a skincare or cosmetic product. Please only return the JSON object.";
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${API_KEY}`;
+            const apiUrl = `https.generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${API_KEY}`;
             
             const payload = {
                 contents: [{
@@ -594,6 +594,7 @@ const App = () => {
     const [products, setProducts] = useState([]);
     const [isLoading, setIsLoading] = useState(true); // Default to true on initial load
     const [appError, setAppError] = useState(null); // Combine Firebase error and listener error
+    const [editProduct, setEditProduct] = useState(null);
 
     useEffect(() => {
         // Update appError if firebaseError changes
@@ -604,15 +605,21 @@ const App = () => {
     }, [firebaseError]);
 
     useEffect(() => {
-        if (!isAuthReady || !db || !userId || appError) {
-            if (isAuthReady && !appError) {
-                // We are ready but missing db or userId (shouldn't happen)
+        if (!isAuthReady || !db || !userId) {
+            // Don't fetch if not ready
+            if (isAuthReady) {
+                 // We are authenticated but missing db or userId (shouldn't happen, but good to check)
                 setIsLoading(false);
+                if (!appError) {
+                    setAppError("Firebase 服務已準備就緒，但資料庫或使用者 ID 遺失。");
+                }
             }
-            return; // Don't fetch if not ready or already in error state
+            return;
         }
-
+        
+        // Only set loading to true when we are actually starting the fetch
         setIsLoading(true);
+
         // FIX: Path should be collection/document/collection (3 segments)
         const productsColRef = collection(db, `${APP_DATA_PATH}/${userId}/products`);
         const q = query(productsColRef);
@@ -640,16 +647,26 @@ const App = () => {
         });
 
         return () => unsubscribe();
-    }, [isAuthReady, db, userId, appError]); // Rerun if auth state changes or error is cleared
+    }, [isAuthReady, db, userId]); // Rerun only when auth state changes
 
     const handleSave = useCallback(() => {
         setView('list');
         setEditProduct(null);
+        // Scroll to top after saving
+        const rootEl = document.getElementById('root');
+        if (rootEl) {
+            rootEl.scrollTo(0, 0);
+        }
     }, []);
 
     const handleEdit = useCallback((product) => {
         setEditProduct(product);
         setView('edit');
+        // Scroll to top to show edit form
+        const rootEl = document.getElementById('root');
+        if (rootEl) {
+            rootEl.scrollTo(0, 0);
+        }
     }, []);
 
     // --- FIX: Simplified Render Logic ---
@@ -693,7 +710,14 @@ const App = () => {
                 userId={userId}
                 db={db}
                 onSave={handleSave}
-                onCancel={() => setView('list')}
+                onCancel={() => {
+                  setView('list');
+                  // Scroll to top when canceling
+                  const rootEl = document.getElementById('root');
+                  if (rootEl) {
+                      rootEl.scrollTo(0, 0);
+                  }
+                }}
                 isLoading={isLoading}
                 setIsLoading={setIsLoading}
                 initialData={editProduct}
@@ -811,6 +835,14 @@ const App = () => {
                     onClick={() => {
                         setEditProduct(null);
                         setView('add');
+                        
+                        // 【FIX: SCROLL TO TOP】
+                        // This forces the app to scroll to the top of the #root container
+                        // to show the form, solving the "button not working" issue.
+                        const rootEl = document.getElementById('root');
+                        if (rootEl) {
+                            rootEl.scrollTo(0, 0);
+                        }
                     }}
                     className="fixed bottom-6 right-6 group"
                     aria-label="新增產品"
@@ -835,5 +867,4 @@ const App = () => {
 };
 
 export default App;
-
 
