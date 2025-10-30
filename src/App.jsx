@@ -154,7 +154,8 @@ const useFirebase = () => {
 
 // --- Product Management Component ---
 
-const AddProductForm = ({ userId, db, onSave, onCancel, isLoading, setIsLoading, initialData = null }) => {
+// FIX: Removed isLoading/setIsLoading props. Form will manage its own busy state.
+const AddProductForm = ({ userId, db, onSave, onCancel, initialData = null }) => {
     const [formState, setFormState] = useState({
         brand: initialData?.brand || '',
         name: initialData?.name || '',
@@ -166,6 +167,9 @@ const AddProductForm = ({ userId, db, onSave, onCancel, isLoading, setIsLoading,
         file: null,
     });
     const [statusMessage, setStatusMessage] = useState('');
+    
+    // FIX: Add internal loading state for AI and Save buttons
+    const [isFormBusy, setIsFormBusy] = useState(false);
 
     const isEditing = !!initialData;
 
@@ -192,7 +196,8 @@ const AddProductForm = ({ userId, db, onSave, onCancel, isLoading, setIsLoading,
             return;
         }
 
-        setIsLoading(true);
+        // FIX: Use internal form busy state
+        setIsFormBusy(true);
         setStatusMessage('AI 正在辨識圖片中，請稍候...');
 
         try {
@@ -248,7 +253,8 @@ const AddProductForm = ({ userId, db, onSave, onCancel, isLoading, setIsLoading,
             console.error("Gemini API Error:", error);
             setStatusMessage(`❌ AI 辨識失敗: ${error.message}`);
         } finally {
-            setIsLoading(false);
+            // FIX: Use internal form busy state
+            setIsFormBusy(false);
         }
     };
 
@@ -259,7 +265,8 @@ const AddProductForm = ({ userId, db, onSave, onCancel, isLoading, setIsLoading,
             return;
         }
 
-        setIsLoading(true);
+        // FIX: Use internal form busy state
+        setIsFormBusy(true);
         setStatusMessage('正在儲存產品資訊...');
 
         const { file, ...serializableFormState } = formState;
@@ -281,14 +288,18 @@ const AddProductForm = ({ userId, db, onSave, onCancel, isLoading, setIsLoading,
                 setStatusMessage('✅ 更新成功！');
             } else {
                 await addDoc(collection(db, dataPath), productData);
+                // FIX: This message will now be visible because the form doesn't get destroyed
                 setStatusMessage('✅ 新增成功！');
             }
-            setTimeout(() => onSave(), 500);
+            // Wait 500ms so user can see the success message
+            setTimeout(() => onSave(), 500); 
         } catch (error) {
             console.error("Firestore Save Error:", error);
             setStatusMessage(`❌ 儲存失敗: ${error.message}`);
         } finally {
-            setIsLoading(false);
+            // FIX: Use internal form busy state
+            // We set it to false, though the component will unmount shortly
+            setIsFormBusy(false);
         }
     };
 
@@ -309,7 +320,7 @@ const AddProductForm = ({ userId, db, onSave, onCancel, isLoading, setIsLoading,
                             <input
                                 type="file"
                                 accept="image/*"
-                                capture="environment"
+                                // FIX: Removed 'capture="environment"' to allow gallery selection
                                 onChange={handleFileChange}
                                 className="hidden"
                                 id="photo-upload"
@@ -340,10 +351,12 @@ const AddProductForm = ({ userId, db, onSave, onCancel, isLoading, setIsLoading,
                                     <button
                                         type="button"
                                         onClick={handleAnalyzeImage}
-                                        disabled={isLoading}
+                                        // FIX: Use internal form busy state
+                                        disabled={isFormBusy}
                                         className="absolute bottom-4 right-4 px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-full shadow-xl hover:shadow-2xl hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center text-sm font-medium"
                                     >
-                                        {isLoading ? (
+                                        {/* FIX: Use internal form busy state */}
+                                        {isFormBusy ? (
                                             <>
                                                 <Loader className="w-4 h-4 mr-2 animate-spin" />
                                                 辨識中...
@@ -440,16 +453,19 @@ const AddProductForm = ({ userId, db, onSave, onCancel, isLoading, setIsLoading,
                             type="button"
                             onClick={onCancel}
                             className="flex-1 px-6 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-2xl transition-all duration-300 shadow-md hover:shadow-lg active:scale-95"
-                            disabled={isLoading}
+                            // FIX: Use internal form busy state
+                            disabled={isFormBusy}
                         >
                             <X className="w-5 h-5 inline-block mr-1" /> 取消
                         </button>
                         <button
                             type="submit"
                             className="flex-1 px-6 py-3.5 bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white font-semibold rounded-2xl transition-all duration-300 shadow-lg hover:shadow-2xl disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
-                            disabled={isLoading}
+                            // FIX: Use internal form busy state
+                            disabled={isFormBusy}
                         >
-                            {isLoading ? (
+                            {/* FIX: Use internal form busy state */}
+                            {isFormBusy ? (
                                 <>
                                     <Loader className="w-5 h-5 inline-block mr-1 animate-spin" />
                                     處理中...
@@ -718,8 +734,7 @@ const App = () => {
                       rootEl.scrollTo(0, 0);
                   }
                 }}
-                isLoading={isLoading}
-                setIsLoading={setIsLoading}
+                // FIX: Removed isLoading/setIsLoading props
                 initialData={editProduct}
             />
         );
@@ -754,7 +769,7 @@ const App = () => {
                                 onEdit={handleEdit}
                                 userId={userId}
                                 db={db}
-                                isLoading={isLoading}
+                                isLoading={isLoading} // Pass list loading state for delete/edit buttons
                             />
                         ))}
                     </div>
