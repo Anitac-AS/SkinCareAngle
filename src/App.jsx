@@ -8,36 +8,34 @@ import { Loader, Camera, Plus, List, X, Trash2, Edit, CheckCircle, Clock, Packag
 const APP_DATA_PATH = "skincare-app-data"; 
 
 // --- Environment Variable Handling ---
-// FIX: 將 import.meta.env 替換為 process.env，以解決編譯器目標環境不支援的問題。
+// FINAL FIX: 直接硬編碼 Firebase 設置，繞過 Vercel/Vite 的環境變數問題。
 const getFirebaseConfig = () => {
-    // 1. 嘗試讀取 Vercel/Vite 提供的標準環境變數 (必須以 VITE_ 開頭)
-    const VERCEL_CONFIG = {
-        apiKey: process.env.VITE_FIREBASE_API_KEY,
-        authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN,
-        projectId: process.env.VITE_FIREBASE_PROJECT_ID,
-        storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET,
-        messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-        appId: process.env.VITE_FIREBASE_APP_ID,
+    // 1. 這是您提供的 Firebase 專案設定
+    const HARDCODED_CONFIG = {
+        apiKey: "AIzaSyBKVFMND1Z0Ugw4JH_usguMcYu7Qyq1pOM",
+        authDomain: "skincaremanager-anita.firebaseapp.com",
+        projectId: "skincaremanager-anita",
+        storageBucket: "skincaremanager-anita.firebasestorage.app",
+        messagingSenderId: "660374271753",
+        appId: "1:660374271753:web:eb56765f628ab8e95e85d8",
     };
 
-    // 檢查 Vercel Config 是否完整 (使用 projectId 作為檢查點)
-    if (VERCEL_CONFIG.projectId && VERCEL_CONFIG.projectId !== "undefined") {
-        console.log("Using Vercel VITE_ Environment Config.");
-        return VERCEL_CONFIG;
+    if (HARDCODED_CONFIG.projectId) {
+        console.log("Using HARDCODED Firebase Config.");
+        return HARDCODED_CONFIG;
     }
-
-    // 2. 嘗試讀取 Canvas 提供的全域變數 (用於 Canvas 環境)
+    
+    // 2. 嘗試讀取 Canvas 提供的全域變數 (作為備用)
     if (typeof __firebase_config !== 'undefined') {
         console.log("Using Canvas Global Config.");
         return JSON.parse(__firebase_config);
     }
     
-    // 3. 如果兩者皆無
     return null;
 };
 
 // API Key (Gemini)
-// 確保您在 Vercel 也設定了 VITE_GEMINI_API_KEY (如果您的 App 要使用 AI 辨識功能)
+// 由於 Gemini API Key 未在 Vercel 環境變數中設置，因此暫時保留為空
 const API_KEY = ""; 
 
 // --- Utility Functions ---
@@ -129,8 +127,8 @@ const useFirebase = () => {
     useEffect(() => {
         try {
             if (!finalFirebaseConfig || !finalFirebaseConfig.projectId) {
-                // FIX: 錯誤訊息已更新，提醒用戶使用 VITE_ 前綴
-                throw new Error("config is missing. Please set Firebase environment variables with VITE_ prefix in Vercel.");
+                // 由於硬編碼已失敗，這將是最終的錯誤提示
+                throw new Error("config is missing. Please check your Firebase settings or environment variables.");
             }
             const app = initializeApp(finalFirebaseConfig);
             const firestore = getFirestore(app);
@@ -665,7 +663,7 @@ const App = () => {
                 <p className="mt-2 text-gray-600 text-sm text-center">
                     {firebaseError 
                         ? (firebaseError.includes("config is missing") 
-                            ? "錯誤：找不到 Firebase 設定。請檢查您是否已在 Vercel 環境變數中設定 VITE_ 開頭的參數。" 
+                            ? "錯誤：找不到 Firebase 設定。請檢查您是否已將設定寫入程式碼（硬編碼）或 Vercel 環境變數。" 
                             : firebaseError)
                         : "正在準備雲端服務時發生錯誤..."}
                 </p>
