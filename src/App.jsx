@@ -7,13 +7,17 @@ import { Loader, Camera, Plus, List, X, Trash2, Edit, CheckCircle, Clock, Packag
 // --- START: Configuration for Vercel/Local Deployment ---
 // Vercel/Vite 會自動從 "import.meta.env" 讀取 VITE_ 開頭的環境變數
 // 您必須在 Vercel 專案的 Settings > Environment Variables 中設定這些值
+
+// FIX: Safely access import.meta.env to avoid build warnings in environments that don't support it.
+const env = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : {};
+
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_API_KEY,
-  authDomain: import.meta.env.VITE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_APP_ID
+  apiKey: env.VITE_API_KEY,
+  authDomain: env.VITE_AUTH_DOMAIN,
+  projectId: env.VITE_PROJECT_ID,
+  storageBucket: env.VITE_STORAGE_BUCKET,
+  messagingSenderId: env.VITE_MESSAGING_SENDER_ID,
+  appId: env.VITE_APP_ID
 };
 
 // 檢查本地設定是否完整 (用於 Vercel 部署)
@@ -673,7 +677,7 @@ const App = () => {
                     {firebaseError.includes("config is missing") 
                         ? "錯誤：找不到 Firebase 設定。請檢查 Vercel 上的環境變數 (VITE_...) 是否已正確設定並重新部署。" 
                         : firebaseError}
-                </input>
+                </p>{/* FIX: Changed </input> to </p> */}
             </div>
         );
     } else if (view === 'add' || view === 'edit') {
@@ -825,4 +829,6 @@ const App = () => {
 };
 
 export default App;
+
+
 
