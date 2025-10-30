@@ -8,16 +8,16 @@ import { Loader, Camera, Plus, List, X, Trash2, Edit, CheckCircle, Clock, Packag
 // Vercel/Vite 會自動從 "import.meta.env" 讀取 VITE_ 開頭的環境變數
 // 您必須在 Vercel 專案的 Settings > Environment Variables 中設定這些值
 
-// FIX: Safely access import.meta.env to avoid build warnings in environments that don't support it.
-const env = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : {};
-
+// FIX: Use Vite's standard import.meta.env directly.
+// This is correct for your localhost (Vite) and Vercel (Vite) environments.
+// The previous "env" wrapper was incorrect and broke the Vercel build.
 const firebaseConfig = {
-  apiKey: env.VITE_API_KEY,
-  authDomain: env.VITE_AUTH_DOMAIN,
-  projectId: env.VITE_PROJECT_ID,
-  storageBucket: env.VITE_STORAGE_BUCKET,
-  messagingSenderId: env.VITE_MESSAGING_SENDER_ID,
-  appId: env.VITE_APP_ID
+  apiKey: import.meta.env.VITE_API_KEY,
+  authDomain: import.meta.env.VITE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_APP_ID
 };
 
 // 檢查本地設定是否完整 (用於 Vercel 部署)
@@ -28,7 +28,7 @@ const isLocalConfigValid = firebaseConfig.projectId && firebaseConfig.apiKey;
 const finalFirebaseConfig = firebaseConfig;
 
 // FIX: Load Gemini API Key from Vercel Environment Variables
-const API_KEY = env.VITE_GEMINI_API_KEY;
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
 // 這是您的資料儲存路徑
 const APP_DATA_PATH = "skincare-app-data"; 
@@ -573,7 +573,7 @@ const ProductCard = ({ product, onDelete, onEdit, userId, db, isLoading }) => {
                     <div>
                         <p className="text-xs font-bold uppercase tracking-wider bg-gradient-to-r from-teal-600 to-emerald-600 bg-clip-text text-transparent">
                             {product.brand}
-                        </d'p>
+                        </p>
                         <h3 className="text-lg font-extrabold text-gray-900 line-clamp-2 mt-1">
                             {product.name}
                         </h3>
